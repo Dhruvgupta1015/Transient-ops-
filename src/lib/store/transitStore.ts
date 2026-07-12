@@ -1,0 +1,1166 @@
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+// --- TYPE DEFINITIONS ---
+
+export type UserRole = 'Administrator' | 'Fleet Manager' | 'Dispatcher' | 'Safety Officer' | 'Financial Analyst';
+
+export interface User {
+  id: string;
+  email: string;
+  fullName: string;
+  role: UserRole;
+}
+
+export type VehicleStatus = 'Available' | 'On Trip' | 'In Shop' | 'Retired';
+
+export interface Vehicle {
+  id: string;
+  registrationNumber: string;
+  name: string;
+  model: string;
+  type: string;
+  maxLoad: number; // in kg
+  currentOdometer: number; // in km
+  purchaseDate: string;
+  acquisitionCost: number;
+  insuranceExpiry: string;
+  pollutionCert: string;
+  imageUrl: string;
+  status: VehicleStatus;
+}
+
+export type DriverStatus = 'Available' | 'On Trip' | 'Off Duty' | 'Suspended';
+
+export interface Driver {
+  id: string;
+  name: string;
+  photo: string;
+  licenseNumber: string;
+  licenseCategory: string;
+  licenseExpiryDate: string;
+  contactNumber: string;
+  email: string;
+  safetyScore: number; // 0 - 100
+  assignedVehicleId: string | null;
+  status: DriverStatus;
+}
+
+export type TripStatus = 'Draft' | 'Dispatched' | 'Completed' | 'Cancelled';
+
+export interface Trip {
+  id: string;
+  source: string;
+  destination: string;
+  vehicleId: string | null;
+  driverId: string | null;
+  cargoWeight: number; // in kg
+  plannedDistance: number; // in km
+  estimatedDuration: number; // in hours
+  status: TripStatus;
+  progress: number; // 0 - 100
+  startTime?: string;
+  endTime?: string;
+  revenue?: number; // Calculated automatically
+}
+
+export type MaintenanceStatus = 'Scheduled' | 'In Progress' | 'Completed';
+
+export interface MaintenanceLog {
+  id: string;
+  vehicleId: string;
+  serviceType: string;
+  description: string;
+  mechanic: string;
+  workshop: string;
+  estimatedCost: number;
+  actualCost: number | null;
+  startDate: string;
+  endDate: string | null;
+  status: MaintenanceStatus;
+}
+
+export interface FuelLog {
+  id: string;
+  vehicleId: string;
+  driverId: string | null;
+  fuelQuantity: number; // in liters
+  fuelCost: number; // in USD
+  fuelStation: string;
+  date: string;
+  odometer: number; // in km
+}
+
+export type ExpenseCategory = 'Fuel' | 'Maintenance' | 'Insurance' | 'Toll' | 'Parking' | 'Repairs' | 'Taxes' | 'Other';
+
+export interface Expense {
+  id: string;
+  category: ExpenseCategory;
+  description: string;
+  amount: number;
+  date: string;
+  vehicleId: string | null;
+  department: string;
+}
+
+export interface Document {
+  id: string;
+  entityType: 'Vehicle' | 'Driver' | 'General';
+  entityId: string;
+  name: string;
+  fileUrl: string;
+  expiryDate: string | null;
+  type: string; // e.g., "Insurance", "Registration", "CDL License"
+}
+
+export interface Notification {
+  id: string;
+  type: 'License Expiry' | 'Insurance Expiry' | 'Maintenance' | 'Fuel Refill' | 'Trip Delay' | 'Vehicle Breakdown';
+  message: string;
+  read: boolean;
+  date: string;
+}
+
+export interface AuditLog {
+  id: string;
+  userEmail: string;
+  action: string;
+  entity: string;
+  timestamp: string;
+}
+
+// --- INITIAL SEED DATA ---
+
+const seedUsers: User[] = [
+  { id: 'usr-1', email: 'admin@transitops.com', fullName: 'Sarah Jenkins', role: 'Administrator' },
+  { id: 'usr-2', email: 'manager@transitops.com', fullName: 'Dave Kovic', role: 'Fleet Manager' },
+  { id: 'usr-3', email: 'dispatcher@transitops.com', fullName: 'Jimmy McNulty', role: 'Dispatcher' },
+  { id: 'usr-4', email: 'safety@transitops.com', fullName: 'Kima Greggs', role: 'Safety Officer' },
+  { id: 'usr-5', email: 'finance@transitops.com', fullName: 'Lester Freamon', role: 'Financial Analyst' },
+];
+
+const seedVehicles: Vehicle[] = [
+  {
+    id: 'veh-1',
+    registrationNumber: 'TX-882-AB',
+    name: 'Volvo FH16 Globetrotter',
+    model: 'Volvo FH16 (2023)',
+    type: 'Heavy Duty Truck',
+    maxLoad: 25000,
+    currentOdometer: 124500,
+    purchaseDate: '2023-04-12',
+    acquisitionCost: 145000,
+    insuranceExpiry: '2026-11-20',
+    pollutionCert: '2026-09-15',
+    imageUrl: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=400',
+    status: 'Available',
+  },
+  {
+    id: 'veh-2',
+    registrationNumber: 'CA-993-XY',
+    name: 'Scania R500 V8',
+    model: 'Scania R500 (2022)',
+    type: 'Heavy Duty Truck',
+    maxLoad: 26000,
+    currentOdometer: 88200,
+    purchaseDate: '2022-08-10',
+    acquisitionCost: 152000,
+    insuranceExpiry: '2026-12-10',
+    pollutionCert: '2026-10-01',
+    imageUrl: 'https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&q=80&w=400',
+    status: 'On Trip',
+  },
+  {
+    id: 'veh-3',
+    registrationNumber: 'NY-441-ZZ',
+    name: 'Mercedes-Benz Actros',
+    model: 'Actros 2646 (2021)',
+    type: 'Heavy Duty Truck',
+    maxLoad: 24000,
+    currentOdometer: 198000,
+    purchaseDate: '2021-06-15',
+    acquisitionCost: 138000,
+    insuranceExpiry: '2026-06-15', // Expired
+    pollutionCert: '2026-05-10', // Expired
+    imageUrl: 'https://images.unsplash.com/photo-1592838064575-70ed626d3a44?auto=format&fit=crop&q=80&w=400',
+    status: 'In Shop',
+  },
+  {
+    id: 'veh-4',
+    registrationNumber: 'IL-552-CD',
+    name: 'Isuzu NPR Diesel',
+    model: 'NPR HD (2024)',
+    type: 'Medium Duty Truck',
+    maxLoad: 7500,
+    currentOdometer: 45000,
+    purchaseDate: '2024-02-14',
+    acquisitionCost: 65000,
+    insuranceExpiry: '2027-02-14',
+    pollutionCert: '2026-12-30',
+    imageUrl: 'https://images.unsplash.com/photo-1516576880881-148f90b8e737?auto=format&fit=crop&q=80&w=400',
+    status: 'Available',
+  },
+  {
+    id: 'veh-5',
+    registrationNumber: 'FL-334-EF',
+    name: 'Ford Transit Cargo Van',
+    model: 'Transit 350 (2023)',
+    type: 'Cargo Van',
+    maxLoad: 3500,
+    currentOdometer: 32000,
+    purchaseDate: '2023-12-01',
+    acquisitionCost: 42000,
+    insuranceExpiry: '2026-12-01',
+    pollutionCert: '2026-11-15',
+    imageUrl: 'https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&q=80&w=400',
+    status: 'Available',
+  },
+  {
+    id: 'veh-6',
+    registrationNumber: 'WA-771-GH',
+    name: 'Kenworth T680',
+    model: 'Kenworth T680 (2018)',
+    type: 'Heavy Duty Truck',
+    maxLoad: 28000,
+    currentOdometer: 310000,
+    purchaseDate: '2018-05-20',
+    acquisitionCost: 165000,
+    insuranceExpiry: '2026-01-20', // Expired
+    pollutionCert: '2025-12-15', // Expired
+    imageUrl: 'https://images.unsplash.com/photo-1501700490588-4337a4e65488?auto=format&fit=crop&q=80&w=400',
+    status: 'Retired',
+  },
+];
+
+const seedDrivers: Driver[] = [
+  {
+    id: 'drv-1',
+    name: 'Alex Johnson',
+    photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150',
+    licenseNumber: 'CDL-99281-A',
+    licenseCategory: 'Class A CDL',
+    licenseExpiryDate: '2027-05-15',
+    contactNumber: '+1 555-0192',
+    email: 'alex.j@transitops.com',
+    safetyScore: 95,
+    assignedVehicleId: 'veh-1',
+    status: 'Available',
+  },
+  {
+    id: 'drv-2',
+    name: 'Marcus Vance',
+    photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150',
+    licenseNumber: 'CDL-88372-A',
+    licenseCategory: 'Class A CDL',
+    licenseExpiryDate: '2026-12-10',
+    contactNumber: '+1 555-0283',
+    email: 'marcus.v@transitops.com',
+    safetyScore: 88,
+    assignedVehicleId: 'veh-2',
+    status: 'On Trip',
+  },
+  {
+    id: 'drv-3',
+    name: 'Sarah Connor',
+    photo: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=150',
+    licenseNumber: 'CDL-77382-B',
+    licenseCategory: 'Class B CDL',
+    licenseExpiryDate: '2026-05-01', // Expired CDL!
+    contactNumber: '+1 555-0982',
+    email: 'sarah.c@transitops.com',
+    safetyScore: 92,
+    assignedVehicleId: null,
+    status: 'Off Duty',
+  },
+  {
+    id: 'drv-4',
+    name: 'David Miller',
+    photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=150',
+    licenseNumber: 'CDL-66291-A',
+    licenseCategory: 'Class A CDL',
+    licenseExpiryDate: '2026-09-30',
+    contactNumber: '+1 555-0371',
+    email: 'david.m@transitops.com',
+    safetyScore: 55, // Low safety score
+    assignedVehicleId: null,
+    status: 'Suspended', // Suspended
+  },
+  {
+    id: 'drv-5',
+    name: 'Elena Rostova',
+    photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150',
+    licenseNumber: 'CDL-55482-A',
+    licenseCategory: 'Class A CDL',
+    licenseExpiryDate: '2027-08-22',
+    contactNumber: '+1 555-0419',
+    email: 'elena.r@transitops.com',
+    safetyScore: 98,
+    assignedVehicleId: 'veh-5',
+    status: 'Available',
+  },
+];
+
+const seedTrips: Trip[] = [
+  {
+    id: 'trip-101',
+    source: 'Chicago Dispatch Center, IL',
+    destination: 'Detroit Logistics Hub, MI',
+    vehicleId: 'veh-2',
+    driverId: 'drv-2',
+    cargoWeight: 18000,
+    plannedDistance: 450,
+    estimatedDuration: 5.5,
+    status: 'Dispatched',
+    progress: 65,
+    startTime: '2026-07-12T05:30:00Z',
+    revenue: 1620, // (18 * 450 * 0.2)
+  },
+  {
+    id: 'trip-102',
+    source: 'Houston Freight yard, TX',
+    destination: 'Dallas North Terminal, TX',
+    vehicleId: 'veh-1',
+    driverId: 'drv-1',
+    cargoWeight: 12000,
+    plannedDistance: 380,
+    estimatedDuration: 4.5,
+    status: 'Draft',
+    progress: 0,
+    revenue: 912,
+  },
+  {
+    id: 'trip-103',
+    source: 'Los Angeles Depot, CA',
+    destination: 'Las Vegas Strip Delivery, NV',
+    vehicleId: 'veh-5',
+    driverId: 'drv-5',
+    cargoWeight: 2200,
+    plannedDistance: 430,
+    estimatedDuration: 5.0,
+    status: 'Completed',
+    progress: 100,
+    startTime: '2026-07-10T08:00:00Z',
+    endTime: '2026-07-10T13:15:00Z',
+    revenue: 189.2,
+  },
+  {
+    id: 'trip-104',
+    source: 'New York Port Authority, NY',
+    destination: 'Boston Freight Center, MA',
+    vehicleId: null,
+    driverId: null,
+    cargoWeight: 5000,
+    plannedDistance: 350,
+    estimatedDuration: 4.2,
+    status: 'Draft',
+    progress: 0,
+    revenue: 350,
+  },
+];
+
+const seedMaintenanceLogs: MaintenanceLog[] = [
+  {
+    id: 'maint-201',
+    vehicleId: 'veh-3',
+    serviceType: 'Brake Overhaul & Calibration',
+    description: 'Squealing noise reported by driver. Replacing pads, rotors, and bleeding lines.',
+    mechanic: 'Robert Shaw',
+    workshop: 'Apex Fleet Services',
+    estimatedCost: 1200,
+    actualCost: null,
+    startDate: '2026-07-10',
+    endDate: null,
+    status: 'In Progress',
+  },
+  {
+    id: 'maint-202',
+    vehicleId: 'veh-1',
+    serviceType: 'Routine Oil & Filters PM',
+    description: '120,000 km standard service PM check.',
+    mechanic: 'Robert Shaw',
+    workshop: 'Apex Fleet Services',
+    estimatedCost: 350,
+    actualCost: 380,
+    startDate: '2026-06-25',
+    endDate: '2026-06-25',
+    status: 'Completed',
+  },
+];
+
+const seedFuelLogs: FuelLog[] = [
+  {
+    id: 'fuel-301',
+    vehicleId: 'veh-1',
+    driverId: 'drv-1',
+    fuelQuantity: 220,
+    fuelCost: 385,
+    fuelStation: 'Shell Ultra Charge Chicago',
+    date: '2026-07-08',
+    odometer: 124100,
+  },
+  {
+    id: 'fuel-302',
+    vehicleId: 'veh-2',
+    driverId: 'drv-2',
+    fuelQuantity: 180,
+    fuelCost: 324,
+    fuelStation: "Love's Travel Stop #482",
+    date: '2026-07-11',
+    odometer: 88150,
+  },
+];
+
+const seedExpenses: Expense[] = [
+  {
+    id: 'exp-401',
+    category: 'Maintenance',
+    description: 'Brake service parts Actros',
+    amount: 650,
+    date: '2026-07-11',
+    vehicleId: 'veh-3',
+    department: 'Operations',
+  },
+  {
+    id: 'exp-402',
+    category: 'Fuel',
+    description: 'Refill Shell - Fuel-301',
+    amount: 385,
+    date: '2026-07-08',
+    vehicleId: 'veh-1',
+    department: 'Operations',
+  },
+  {
+    id: 'exp-403',
+    category: 'Insurance',
+    description: 'Fleet insurance monthly policy installment',
+    amount: 4800,
+    date: '2026-07-01',
+    vehicleId: null,
+    department: 'Logistics',
+  },
+  {
+    id: 'exp-404',
+    category: 'Toll',
+    description: 'I-90 Toll Transponder refill',
+    amount: 120,
+    date: '2026-07-09',
+    vehicleId: 'veh-2',
+    department: 'Operations',
+  },
+];
+
+const seedDocuments: Document[] = [
+  {
+    id: 'doc-501',
+    entityType: 'Vehicle',
+    entityId: 'veh-1',
+    name: 'Volvo FH16 Commercial Insurance Policy',
+    fileUrl: '/docs/ins_volvo_fh16.pdf',
+    expiryDate: '2026-11-20',
+    type: 'Insurance',
+  },
+  {
+    id: 'doc-502',
+    entityType: 'Vehicle',
+    entityId: 'veh-3',
+    name: 'Actros Pollution Compliance Certificate',
+    fileUrl: '/docs/pollution_actros.pdf',
+    expiryDate: '2026-05-10', // Expired
+    type: 'Pollution',
+  },
+  {
+    id: 'doc-503',
+    entityType: 'Driver',
+    entityId: 'drv-3',
+    name: 'CDL License - Sarah Connor',
+    fileUrl: '/docs/lic_sarah_connor.pdf',
+    expiryDate: '2026-05-01', // Expired
+    type: 'License',
+  },
+];
+
+const seedNotifications: Notification[] = [
+  {
+    id: 'not-601',
+    type: 'Insurance Expiry',
+    message: 'Vehicle NY-441-ZZ (Mercedes-Benz Actros) insurance expired on 2026-06-15.',
+    read: false,
+    date: '2026-07-12T08:00:00Z',
+  },
+  {
+    id: 'not-602',
+    type: 'License Expiry',
+    message: 'Driver Sarah Connor CDL License expired on 2026-05-01.',
+    read: false,
+    date: '2026-07-12T08:15:00Z',
+  },
+  {
+    id: 'not-603',
+    type: 'Vehicle Breakdown',
+    message: 'Vehicle NY-441-ZZ is In Shop for Brake Overhaul. Trip Dispatch locked.',
+    read: false,
+    date: '2026-07-12T08:30:00Z',
+  },
+];
+
+const seedAuditLogs: AuditLog[] = [
+  {
+    id: 'aud-701',
+    userEmail: 'system@transitops.com',
+    action: 'System Bootstrapping',
+    entity: 'Database',
+    timestamp: '2026-07-12T04:00:00Z',
+  },
+];
+
+// --- INTERACTION STORE INTERFACE ---
+
+interface TransitState {
+  currentUser: User | null;
+  users: User[];
+  vehicles: Vehicle[];
+  drivers: Driver[];
+  trips: Trip[];
+  maintenanceLogs: MaintenanceLog[];
+  fuelLogs: FuelLog[];
+  expenses: Expense[];
+  documents: Document[];
+  notifications: Notification[];
+  auditLogs: AuditLog[];
+  rememberMe: boolean;
+
+  // Authentication Actions
+  login: (email: string, role?: UserRole) => boolean;
+  logout: () => void;
+  setRememberMe: (val: boolean) => void;
+
+  // Vehicles Actions
+  addVehicle: (vehicle: Omit<Vehicle, 'id'>) => { success: boolean; message: string };
+  updateVehicle: (id: string, vehicle: Partial<Vehicle>) => { success: boolean; message: string };
+  deleteVehicle: (id: string) => { success: boolean; message: string };
+
+  // Drivers Actions
+  addDriver: (driver: Omit<Driver, 'id'>) => { success: boolean; message: string };
+  updateDriver: (id: string, driver: Partial<Driver>) => { success: boolean; message: string };
+  deleteDriver: (id: string) => { success: boolean; message: string };
+
+  // Trips Actions
+  addTrip: (trip: Omit<Trip, 'id' | 'progress' | 'revenue'>) => { success: boolean; message: string };
+  updateTrip: (id: string, trip: Partial<Trip>) => { success: boolean; message: string };
+  dispatchTrip: (id: string) => { success: boolean; message: string };
+  completeTrip: (id: string) => { success: boolean; message: string };
+  cancelTrip: (id: string) => { success: boolean; message: string };
+  deleteTrip: (id: string) => { success: boolean; message: string };
+
+  // Maintenance Actions
+  addMaintenanceLog: (log: Omit<MaintenanceLog, 'id'>) => { success: boolean; message: string };
+  updateMaintenanceLog: (id: string, log: Partial<MaintenanceLog>) => { success: boolean; message: string };
+
+  // Fuel Actions
+  addFuelLog: (log: Omit<FuelLog, 'id'>) => { success: boolean; message: string };
+
+  // Expenses Actions
+  addExpense: (expense: Omit<Expense, 'id'>) => { success: boolean; message: string };
+
+  // Documents Actions
+  addDocument: (doc: Omit<Document, 'id'>) => { success: boolean; message: string };
+  deleteDocument: (id: string) => { success: boolean; message: string };
+
+  // Notifications Actions
+  addNotification: (type: Notification['type'], message: string) => void;
+  markNotificationRead: (id: string) => void;
+  markAllNotificationsRead: () => void;
+
+  // Audit Action
+  logAction: (action: string, entity: string) => void;
+
+  // Reset db
+  resetStore: () => void;
+}
+
+export const useTransitStore = create<TransitState>()(
+  persist(
+    (set, get) => ({
+      currentUser: null,
+      users: seedUsers,
+      vehicles: seedVehicles,
+      drivers: seedDrivers,
+      trips: seedTrips,
+      maintenanceLogs: seedMaintenanceLogs,
+      fuelLogs: seedFuelLogs,
+      expenses: seedExpenses,
+      documents: seedDocuments,
+      notifications: seedNotifications,
+      auditLogs: seedAuditLogs,
+      rememberMe: false,
+
+      setRememberMe: (val) => set({ rememberMe: val }),
+
+      login: (email, selectedRole) => {
+        const emailLower = email.toLowerCase().trim();
+        const user = get().users.find((u) => u.email.toLowerCase() === emailLower);
+        if (user) {
+          const authenticatedUser = selectedRole ? { ...user, role: selectedRole } : user;
+          set({ currentUser: authenticatedUser });
+          get().logAction('User Login', `User ${authenticatedUser.email} logged in with role ${authenticatedUser.role}`);
+          return true;
+        }
+        // If not found in seed, create a default user dynamically for convenience
+        const newUser: User = {
+          id: `usr-${Date.now()}`,
+          email: emailLower,
+          fullName: emailLower.split('@')[0].toUpperCase(),
+          role: selectedRole || 'Fleet Manager',
+        };
+        set((state) => ({
+          users: [...state.users, newUser],
+          currentUser: newUser,
+        }));
+        get().logAction('Dynamic User Registration', `Registered user ${newUser.email} as ${newUser.role}`);
+        return true;
+      },
+
+      logout: () => {
+        const user = get().currentUser;
+        if (user) {
+          get().logAction('User Logout', `User ${user.email} logged out`);
+        }
+        set({ currentUser: null });
+      },
+
+      // Vehicles CRUD
+      addVehicle: (vehicle) => {
+        const exists = get().vehicles.some(
+          (v) => v.registrationNumber.toUpperCase() === vehicle.registrationNumber.toUpperCase()
+        );
+        if (exists) {
+          return { success: false, message: `Vehicle Registration Number ${vehicle.registrationNumber} must be unique.` };
+        }
+
+        const newVeh: Vehicle = {
+          ...vehicle,
+          id: `veh-${Date.now()}`,
+          status: vehicle.status || 'Available',
+        };
+
+        set((state) => ({ vehicles: [...state.vehicles, newVeh] }));
+        get().logAction('Create Vehicle', `Added vehicle ${newVeh.registrationNumber} (${newVeh.name})`);
+        return { success: true, message: 'Vehicle added successfully.' };
+      },
+
+      updateVehicle: (id, update) => {
+        if (update.registrationNumber) {
+          const exists = get().vehicles.some(
+            (v) => v.id !== id && v.registrationNumber.toUpperCase() === update.registrationNumber?.toUpperCase()
+          );
+          if (exists) {
+            return { success: false, message: `Registration number ${update.registrationNumber} is already in use by another vehicle.` };
+          }
+        }
+
+        set((state) => ({
+          vehicles: state.vehicles.map((v) => (v.id === id ? { ...v, ...update } : v)),
+        }));
+        const veh = get().vehicles.find((v) => v.id === id);
+        get().logAction('Update Vehicle', `Updated vehicle ${veh?.registrationNumber}`);
+        return { success: true, message: 'Vehicle updated successfully.' };
+      },
+
+      deleteVehicle: (id) => {
+        const veh = get().vehicles.find((v) => v.id === id);
+        if (!veh) return { success: false, message: 'Vehicle not found.' };
+
+        // Check if assigned to any active trip
+        const activeTrip = get().trips.some((t) => t.vehicleId === id && (t.status === 'Dispatched' || t.status === 'Draft'));
+        if (activeTrip) {
+          return { success: false, message: 'Cannot delete vehicle. It is currently assigned to a draft or dispatched trip.' };
+        }
+
+        set((state) => ({
+          vehicles: state.vehicles.filter((v) => v.id !== id),
+          drivers: state.drivers.map((d) => (d.assignedVehicleId === id ? { ...d, assignedVehicleId: null } : d)),
+        }));
+        get().logAction('Delete Vehicle', `Deleted vehicle ${veh.registrationNumber}`);
+        return { success: true, message: 'Vehicle deleted successfully.' };
+      },
+
+      // Drivers CRUD
+      addDriver: (driver) => {
+        const exists = get().drivers.some((d) => d.email.toLowerCase() === driver.email.toLowerCase());
+        if (exists) {
+          return { success: false, message: `Driver with email ${driver.email} already exists.` };
+        }
+
+        const newDrv: Driver = {
+          ...driver,
+          id: `drv-${Date.now()}`,
+          status: driver.status || 'Available',
+        };
+
+        set((state) => ({ drivers: [...state.drivers, newDrv] }));
+        get().logAction('Create Driver', `Added driver ${newDrv.name}`);
+        return { success: true, message: 'Driver added successfully.' };
+      },
+
+      updateDriver: (id, update) => {
+        if (update.email) {
+          const exists = get().drivers.some((d) => d.id !== id && d.email.toLowerCase() === update.email?.toLowerCase());
+          if (exists) {
+            return { success: false, message: `Email ${update.email} is already in use by another driver.` };
+          }
+        }
+
+        set((state) => ({
+          drivers: state.drivers.map((d) => (d.id === id ? { ...d, ...update } : d)),
+        }));
+        const drv = get().drivers.find((d) => d.id === id);
+        get().logAction('Update Driver', `Updated driver ${drv?.name}`);
+        return { success: true, message: 'Driver updated successfully.' };
+      },
+
+      deleteDriver: (id) => {
+        const drv = get().drivers.find((d) => d.id === id);
+        if (!drv) return { success: false, message: 'Driver not found.' };
+
+        // Check active trips
+        const activeTrip = get().trips.some((t) => t.driverId === id && (t.status === 'Dispatched' || t.status === 'Draft'));
+        if (activeTrip) {
+          return { success: false, message: 'Cannot delete driver. They are currently assigned to a draft or dispatched trip.' };
+        }
+
+        set((state) => ({
+          drivers: state.drivers.filter((d) => d.id !== id),
+        }));
+        get().logAction('Delete Driver', `Deleted driver ${drv.name}`);
+        return { success: true, message: 'Driver deleted successfully.' };
+      },
+
+      // Trips Core Business Rules
+      addTrip: (trip) => {
+        // Validate cargo weight
+        if (trip.vehicleId) {
+          const vehicle = get().vehicles.find((v) => v.id === trip.vehicleId);
+          if (vehicle && trip.cargoWeight > vehicle.maxLoad) {
+            return { success: false, message: `Cargo weight (${trip.cargoWeight} kg) exceeds vehicle maximum load capacity (${vehicle.maxLoad} kg).` };
+          }
+        }
+
+        const newTrip: Trip = {
+          ...trip,
+          id: `trip-${Date.now()}`,
+          progress: 0,
+          revenue: (trip.cargoWeight / 1000) * trip.plannedDistance * 0.20, // $0.20 per ton-km
+        };
+
+        set((state) => ({ trips: [...state.trips, newTrip] }));
+        get().logAction('Create Trip', `Created draft trip from ${trip.source} to ${trip.destination}`);
+        return { success: true, message: 'Trip created in draft status.' };
+      },
+
+      updateTrip: (id, update) => {
+        const trip = get().trips.find((t) => t.id === id);
+        if (!trip) return { success: false, message: 'Trip not found.' };
+
+        // Capacity validation on vehicle change
+        const vehicleId = update.vehicleId !== undefined ? update.vehicleId : trip.vehicleId;
+        const cargoWeight = update.cargoWeight !== undefined ? update.cargoWeight : trip.cargoWeight;
+        if (vehicleId) {
+          const vehicle = get().vehicles.find((v) => v.id === vehicleId);
+          if (vehicle && cargoWeight > vehicle.maxLoad) {
+            return { success: false, message: `Cargo weight (${cargoWeight} kg) exceeds vehicle maximum capacity (${vehicle.maxLoad} kg).` };
+          }
+        }
+
+        // Recalculate revenue if cargo or distance changes
+        let revenue = trip.revenue;
+        const plannedDistance = update.plannedDistance !== undefined ? update.plannedDistance : trip.plannedDistance;
+        if (cargoWeight !== undefined || plannedDistance !== undefined) {
+          revenue = (cargoWeight / 1000) * plannedDistance * 0.20;
+        }
+
+        set((state) => ({
+          trips: state.trips.map((t) => (t.id === id ? { ...t, ...update, revenue } : t)),
+        }));
+        get().logAction('Update Trip', `Updated trip details for trip-${id.split('-')[1]}`);
+        return { success: true, message: 'Trip updated successfully.' };
+      },
+
+      dispatchTrip: (id) => {
+        const trip = get().trips.find((t) => t.id === id);
+        if (!trip) return { success: false, message: 'Trip not found.' };
+        if (!trip.vehicleId || !trip.driverId) {
+          return { success: false, message: 'Cannot dispatch. Vehicle and Driver must be assigned first.' };
+        }
+
+        const vehicle = get().vehicles.find((v) => v.id === trip.vehicleId);
+        const driver = get().drivers.find((d) => d.id === trip.driverId);
+
+        if (!vehicle || !driver) {
+          return { success: false, message: 'Vehicle or Driver no longer exists.' };
+        }
+
+        // Enforce Business Rules
+        // Rule: Vehicles marked Retired or In Shop cannot be assigned to trips.
+        if (vehicle.status === 'Retired') {
+          return { success: false, message: `Vehicle ${vehicle.registrationNumber} is Retired and cannot be dispatched.` };
+        }
+        if (vehicle.status === 'In Shop') {
+          return { success: false, message: `Vehicle ${vehicle.registrationNumber} is In Shop for maintenance and cannot be dispatched.` };
+        }
+        // Rule: A vehicle already On Trip cannot be assigned to another trip.
+        if (vehicle.status === 'On Trip') {
+          return { success: false, message: `Vehicle ${vehicle.registrationNumber} is already active on another trip.` };
+        }
+
+        // Rule: Drivers with expired licenses cannot be assigned.
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (driver.licenseExpiryDate < todayStr) {
+          return { success: false, message: `Driver ${driver.name} has an EXPIRED Commercial License and cannot be dispatched.` };
+        }
+        // Rule: Suspended drivers cannot be assigned.
+        if (driver.status === 'Suspended') {
+          return { success: false, message: `Driver ${driver.name} is Suspended and cannot be assigned to a trip.` };
+        }
+        // Rule: A driver already On Trip cannot be assigned to another trip.
+        if (driver.status === 'On Trip') {
+          return { success: false, message: `Driver ${driver.name} is already active on another trip.` };
+        }
+
+        // Enforce Capacity Rule just in case
+        if (trip.cargoWeight > vehicle.maxLoad) {
+          return { success: false, message: `Cargo weight (${trip.cargoWeight} kg) exceeds vehicle maximum capacity (${vehicle.maxLoad} kg).` };
+        }
+
+        // Dispatch status update
+        // Rule: Dispatching a trip automatically changes: Vehicle -> On Trip, Driver -> On Trip
+        set((state) => ({
+          trips: state.trips.map((t) =>
+            t.id === id ? { ...t, status: 'Dispatched', progress: 5, startTime: new Date().toISOString() } : t
+          ),
+          vehicles: state.vehicles.map((v) => (v.id === trip.vehicleId ? { ...v, status: 'On Trip' } : v)),
+          drivers: state.drivers.map((d) => (d.id === trip.driverId ? { ...d, status: 'On Trip' } : d)),
+        }));
+
+        get().logAction('Dispatch Trip', `Dispatched trip-${id.split('-')[1]} with vehicle ${vehicle.registrationNumber} & driver ${driver.name}`);
+        return { success: true, message: 'Trip successfully dispatched!' };
+      },
+
+      completeTrip: (id) => {
+        const trip = get().trips.find((t) => t.id === id);
+        if (!trip) return { success: false, message: 'Trip not found.' };
+
+        // Rule: Completing a trip automatically changes: Vehicle -> Available, Driver -> Available
+        // And we add trip distance to vehicle odometer
+        set((state) => ({
+          trips: state.trips.map((t) =>
+            t.id === id ? { ...t, status: 'Completed', progress: 100, endTime: new Date().toISOString() } : t
+          ),
+          vehicles: state.vehicles.map((v) => {
+            if (v.id === trip.vehicleId) {
+              return {
+                ...v,
+                status: 'Available',
+                currentOdometer: Number(v.currentOdometer) + Number(trip.plannedDistance),
+              };
+            }
+            return v;
+          }),
+          drivers: state.drivers.map((d) => (d.id === trip.driverId ? { ...d, status: 'Available' } : d)),
+        }));
+
+        // Log completion action
+        const vehicle = get().vehicles.find((v) => v.id === trip.vehicleId);
+        const driver = get().drivers.find((d) => d.id === trip.driverId);
+        get().logAction('Complete Trip', `Completed trip-${id.split('-')[1]}. Vehicle odometer updated to ${vehicle ? Number(vehicle.currentOdometer) + Number(trip.plannedDistance) : ''} km.`);
+
+        // Log completed trip as revenue expense
+        if (trip.revenue) {
+          // Increment revenue in analytics (implicitly)
+        }
+
+        return { success: true, message: 'Trip completed successfully.' };
+      },
+
+      cancelTrip: (id) => {
+        const trip = get().trips.find((t) => t.id === id);
+        if (!trip) return { success: false, message: 'Trip not found.' };
+
+        // Rule: Cancelling a dispatched trip restores vehicle and driver to Available
+        const wasDispatched = trip.status === 'Dispatched';
+
+        set((state) => ({
+          trips: state.trips.map((t) => (t.id === id ? { ...t, status: 'Cancelled', progress: 0 } : t)),
+          vehicles: state.vehicles.map((v) =>
+            v.id === trip.vehicleId && wasDispatched ? { ...v, status: 'Available' } : v
+          ),
+          drivers: state.drivers.map((d) =>
+            d.id === trip.driverId && wasDispatched ? { ...d, status: 'Available' } : d
+          ),
+        }));
+
+        get().logAction('Cancel Trip', `Cancelled trip-${id.split('-')[1]} (was dispatched: ${wasDispatched})`);
+        return { success: true, message: 'Trip cancelled successfully.' };
+      },
+
+      deleteTrip: (id) => {
+        const trip = get().trips.find((t) => t.id === id);
+        if (!trip) return { success: false, message: 'Trip not found.' };
+        if (trip.status === 'Dispatched') {
+          return { success: false, message: 'Cannot delete an active dispatched trip. Cancel it first.' };
+        }
+
+        set((state) => ({
+          trips: state.trips.filter((t) => t.id !== id),
+        }));
+        get().logAction('Delete Trip', `Deleted trip-${id.split('-')[1]}`);
+        return { success: true, message: 'Trip deleted.' };
+      },
+
+      // Maintenance Logs
+      addMaintenanceLog: (log) => {
+        const newLog: MaintenanceLog = {
+          ...log,
+          id: `maint-${Date.now()}`,
+          actualCost: log.actualCost || null,
+        };
+
+        // Rule: Creating a maintenance record automatically changes vehicle status to In Shop
+        set((state) => ({
+          maintenanceLogs: [...state.maintenanceLogs, newLog],
+          vehicles: state.vehicles.map((v) =>
+            v.id === log.vehicleId ? { ...v, status: 'In Shop' } : v
+          ),
+        }));
+
+        const vehicle = get().vehicles.find((v) => v.id === log.vehicleId);
+        get().logAction('Create Maintenance', `Scheduled maintenance for vehicle ${vehicle?.registrationNumber}. Vehicle status changed to In Shop.`);
+
+        // Add auto notification for maintenance scheduling
+        get().addNotification(
+          'Maintenance',
+          `Vehicle ${vehicle?.registrationNumber || 'Unknown'} has been sent to shop for: ${log.serviceType}.`
+        );
+
+        // Add to expenses log as operational maintenance expense
+        get().addExpense({
+          category: 'Maintenance',
+          description: `Est. maintenance: ${log.serviceType} at ${log.workshop}`,
+          amount: log.estimatedCost,
+          date: log.startDate,
+          vehicleId: log.vehicleId,
+          department: 'Operations',
+        });
+
+        return { success: true, message: 'Maintenance record created.' };
+      },
+
+      updateMaintenanceLog: (id, update) => {
+        const log = get().maintenanceLogs.find((m) => m.id === id);
+        if (!log) return { success: false, message: 'Maintenance record not found.' };
+
+        set((state) => ({
+          maintenanceLogs: state.maintenanceLogs.map((m) => (m.id === id ? { ...m, ...update } : m)),
+        }));
+
+        const updatedLog = get().maintenanceLogs.find((m) => m.id === id);
+
+        // Rule: Closing maintenance restores vehicle status to Available unless retired
+        if (update.status === 'Completed' && log.status !== 'Completed') {
+          const vehicle = get().vehicles.find((v) => v.id === log.vehicleId);
+          if (vehicle) {
+            const nextStatus = vehicle.status === 'Retired' ? 'Retired' : 'Available';
+            set((state) => ({
+              vehicles: state.vehicles.map((v) => (v.id === log.vehicleId ? { ...v, status: nextStatus } : v)),
+            }));
+            get().logAction('Complete Maintenance', `Completed maintenance for ${vehicle.registrationNumber}. Status set to ${nextStatus}.`);
+          }
+
+          // If actual cost is logged, update or create expenses discrepancy
+          if (updatedLog?.actualCost) {
+            get().addExpense({
+              category: 'Maintenance',
+              description: `Actual maintenance bill: ${updatedLog.serviceType} (Final Cost)`,
+              amount: updatedLog.actualCost - updatedLog.estimatedCost, // adjustment amount
+              date: updatedLog.endDate || new Date().toISOString().split('T')[0],
+              vehicleId: updatedLog.vehicleId,
+              department: 'Operations',
+            });
+          }
+        }
+
+        return { success: true, message: 'Maintenance record updated successfully.' };
+      },
+
+      // Fuel Logs
+      addFuelLog: (log) => {
+        const newLog: FuelLog = {
+          ...log,
+          id: `fuel-${Date.now()}`,
+        };
+
+        // Automate odometer update: if logged fuel odometer is greater than vehicle's current odometer, update it.
+        const vehicle = get().vehicles.find((v) => v.id === log.vehicleId);
+        if (vehicle && log.odometer > vehicle.currentOdometer) {
+          set((state) => ({
+            vehicles: state.vehicles.map((v) =>
+              v.id === log.vehicleId ? { ...v, currentOdometer: log.odometer } : v
+            ),
+          }));
+          get().logAction('Odometer Autoupdate', `Updated odometer for ${vehicle.registrationNumber} to ${log.odometer} km via Fuel Log.`);
+        }
+
+        set((state) => ({
+          fuelLogs: [...state.fuelLogs, newLog],
+        }));
+
+        // Log fuel refilling as expense automatically
+        get().addExpense({
+          category: 'Fuel',
+          description: `Fuel refill: ${log.fuelQuantity}L at ${log.fuelStation}`,
+          amount: log.fuelCost,
+          date: log.date,
+          vehicleId: log.vehicleId,
+          department: 'Operations',
+        });
+
+        get().logAction('Log Fuel Refill', `Added fuel log of $${log.fuelCost} for vehicle ${vehicle?.registrationNumber || ''}`);
+        return { success: true, message: 'Fuel log and associated expense recorded successfully.' };
+      },
+
+      // Expenses
+      addExpense: (expense) => {
+        const newExpense: Expense = {
+          ...expense,
+          id: `exp-${Date.now()}`,
+        };
+        set((state) => ({
+          expenses: [...state.expenses, newExpense],
+        }));
+        return { success: true, message: 'Expense recorded.' };
+      },
+
+      // Documents
+      addDocument: (doc) => {
+        const newDoc: Document = {
+          ...doc,
+          id: `doc-${Date.now()}`,
+        };
+        set((state) => ({
+          documents: [...state.documents, newDoc],
+        }));
+
+        // Check if expiry date requires adding a notification alert
+        if (doc.expiryDate) {
+          const today = new Date();
+          const expiry = new Date(doc.expiryDate);
+          const diffTime = expiry.getTime() - today.getTime();
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+          if (diffDays <= 0) {
+            get().addNotification(
+              doc.type === 'License' ? 'License Expiry' : 'Insurance Expiry',
+              `EXPIRED: Document "${doc.name}" has expired on ${doc.expiryDate}.`
+            );
+          } else if (diffDays <= 30) {
+            get().addNotification(
+              doc.type === 'License' ? 'License Expiry' : 'Insurance Expiry',
+              `EXPIRING SOON: Document "${doc.name}" will expire in ${diffDays} days on ${doc.expiryDate}.`
+            );
+          }
+        }
+
+        get().logAction('Add Document', `Uploaded document "${doc.name}"`);
+        return { success: true, message: 'Document added.' };
+      },
+
+      deleteDocument: (id) => {
+        const doc = get().documents.find((d) => d.id === id);
+        if (!doc) return { success: false, message: 'Document not found.' };
+
+        set((state) => ({
+          documents: state.documents.filter((d) => d.id !== id),
+        }));
+        get().logAction('Delete Document', `Deleted document "${doc.name}"`);
+        return { success: true, message: 'Document deleted successfully.' };
+      },
+
+      // Notifications
+      addNotification: (type, message) => {
+        const newNotif: Notification = {
+          id: `not-${Date.now()}`,
+          type,
+          message,
+          read: false,
+          date: new Date().toISOString(),
+        };
+        set((state) => ({
+          notifications: [newNotif, ...state.notifications],
+        }));
+      },
+
+      markNotificationRead: (id) => {
+        set((state) => ({
+          notifications: state.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
+        }));
+      },
+
+      markAllNotificationsRead: () => {
+        set((state) => ({
+          notifications: state.notifications.map((n) => ({ ...n, read: true })),
+        }));
+      },
+
+      logAction: (action, entity) => {
+        const newLog: AuditLog = {
+          id: `aud-${Date.now()}`,
+          userEmail: get().currentUser?.email || 'system@transitops.com',
+          action,
+          entity,
+          timestamp: new Date().toISOString(),
+        };
+        set((state) => ({
+          auditLogs: [newLog, ...state.auditLogs],
+        }));
+      },
+
+      resetStore: () => {
+        set({
+          vehicles: seedVehicles,
+          drivers: seedDrivers,
+          trips: seedTrips,
+          maintenanceLogs: seedMaintenanceLogs,
+          fuelLogs: seedFuelLogs,
+          expenses: seedExpenses,
+          documents: seedDocuments,
+          notifications: seedNotifications,
+          auditLogs: [
+            {
+              id: `aud-${Date.now()}`,
+              userEmail: 'system@transitops.com',
+              action: 'Database Restore',
+              entity: 'System Reset',
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        });
+      },
+    }),
+    {
+      name: 'transitops-storage-v1',
+      partialize: (state) => ({
+        currentUser: state.currentUser,
+        users: state.users,
+        vehicles: state.vehicles,
+        drivers: state.drivers,
+        trips: state.trips,
+        maintenanceLogs: state.maintenanceLogs,
+        fuelLogs: state.fuelLogs,
+        expenses: state.expenses,
+        documents: state.documents,
+        notifications: state.notifications,
+        auditLogs: state.auditLogs,
+        rememberMe: state.rememberMe,
+      }),
+    }
+  )
+);
