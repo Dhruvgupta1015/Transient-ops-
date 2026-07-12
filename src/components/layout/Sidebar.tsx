@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useTransitStore, UserRole } from '@/lib/store/transitStore';
 import { usePathname, useRouter } from 'next/navigation';
+import { useSidebar } from '@/app/(dashboard)/layout';
 import { 
   LayoutDashboard, 
   Truck, 
@@ -52,8 +53,9 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentUser, logout } = useTransitStore();
+  const { currentUser, currentCompany, logout } = useTransitStore();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const { isMobileOpen, setMobileOpen } = useSidebar();
 
   const handleLogout = () => {
     logout();
@@ -63,15 +65,28 @@ export function Sidebar() {
   const currentRole = currentUser?.role || 'Fleet Manager';
 
   return (
-    <aside className={`shrink-0 bg-white dark:bg-[#1e293b] border-r border-[#e2e8f0] dark:border-[#2a2c35] flex flex-col h-screen transition-all duration-300 relative shadow-[1px_0_10px_rgba(0,0,0,0.02)] ${isCollapsed ? 'w-20' : 'w-64'}`}>
-      
-      {/* Collapse Toggle Button */}
-      <button 
-        onClick={() => setIsCollapsed(!isCollapsed)}
-        className="absolute -right-3 top-6 h-6 w-6 rounded-full border border-[#e2e8f0] dark:border-[#2a2c35] bg-white dark:bg-[#1e293b] text-slate-400 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 flex items-center justify-center shadow-sm cursor-pointer z-50 transition-colors"
-      >
-        {isCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
-      </button>
+    <>
+      {/* Backdrop for mobile view */}
+      {isMobileOpen && (
+        <div 
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-40 lg:hidden transition-opacity duration-300"
+        />
+      )}
+
+      <aside className={`fixed inset-y-0 left-0 lg:relative z-50 flex flex-col h-screen shrink-0 bg-white dark:bg-[#1e293b] border-r border-[#e2e8f0] dark:border-[#2a2c35] transition-all duration-300 shadow-xl lg:shadow-[1px_0_10px_rgba(0,0,0,0.02)] ${
+        isCollapsed ? 'w-20' : 'w-64'
+      } ${
+        isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+      }`}>
+        
+        {/* Collapse Toggle Button */}
+        <button 
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="absolute -right-3 top-6 h-6 w-6 rounded-full border border-[#e2e8f0] dark:border-[#2a2c35] bg-white dark:bg-[#1e293b] text-slate-400 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hidden lg:flex items-center justify-center shadow-sm cursor-pointer z-50 transition-colors"
+        >
+          {isCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
+        </button>
 
       {/* Platform Branding */}
       <div className={`h-16 px-6 flex items-center gap-3 border-b border-[#e2e8f0] dark:border-[#2a2c35] ${isCollapsed ? 'justify-center px-0' : ''}`}>
@@ -81,7 +96,7 @@ export function Sidebar() {
         {!isCollapsed && (
           <div className="overflow-hidden">
             <span className="text-sm font-bold text-slate-800 dark:text-white tracking-tight block leading-none">TransitOps</span>
-            <span className="text-[10px] text-slate-400 font-medium tracking-wider uppercase">Enterprise</span>
+            <span className="text-[10px] text-slate-400 font-medium tracking-wider uppercase">{currentCompany?.name || 'Enterprise'}</span>
           </div>
         )}
       </div>
@@ -113,6 +128,7 @@ export function Sidebar() {
             <Link
               key={item.name}
               href={item.href}
+              onClick={() => setMobileOpen(false)}
               className={`flex items-center rounded-xl text-xs transition-all duration-200 border ${
                 isCollapsed ? 'justify-center p-2.5' : 'gap-2.5 px-3 py-2.5'
               } ${
@@ -165,6 +181,7 @@ export function Sidebar() {
           </>
         )}
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

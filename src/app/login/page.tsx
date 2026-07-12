@@ -112,7 +112,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-950 text-slate-100 selection:bg-indigo-500 selection:text-white">
       {/* Brand & Marketing side */}
-      <div className="relative md:flex md:w-1/2 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-950 p-12 flex-col justify-between overflow-hidden border-r border-slate-800/40">
+      <div className="relative hidden md:flex md:w-1/2 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-950 p-12 flex-col justify-between overflow-hidden border-r border-slate-800/40">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(99,102,241,0.1),transparent_50%)]" />
         <div className="absolute -left-20 -bottom-20 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl" />
 
@@ -153,7 +153,7 @@ export default function LoginPage() {
       </div>
 
       {/* Login Form side */}
-      <div className="flex flex-col justify-center items-center md:w-1/2 p-6 md:p-16 bg-slate-950">
+      <div className="flex flex-col justify-center items-center w-full md:w-1/2 min-h-screen p-6 md:p-16 bg-slate-950">
         <div className="w-full max-w-md space-y-8">
           <div className="space-y-2">
             <h2 className="text-3xl font-bold tracking-tight text-white">Sign In</h2>

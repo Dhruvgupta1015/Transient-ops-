@@ -15,6 +15,18 @@ import {
 
 export type UserRole = 'Administrator' | 'Fleet Manager' | 'Dispatcher' | 'Safety Officer' | 'Financial Analyst' | 'Driver' | 'Maintenance Manager' | 'Viewer' | 'Security';
 export type UserStatus = 'Pending Approval' | 'Approved' | 'Rejected' | 'Suspended' | 'Inactive' | 'Information Required';
+export type CompanyStatus = 'pending_approval' | 'active' | 'suspended';
+
+export interface Company {
+  id: string;
+  name: string;
+  status: CompanyStatus;
+  industry?: string;
+  companySize?: string;
+  createdAt?: string;
+  activatedAt?: string;
+  createdByAdminUserId?: string;
+}
 
 export interface User {
   id: string;
@@ -22,6 +34,7 @@ export interface User {
   fullName: string;
   role: UserRole;
   approvalStatus: UserStatus;
+  companyId?: string;
   firstName?: string;
   lastName?: string;
   profilePhoto?: string;
@@ -52,6 +65,7 @@ export interface UserApprovalHistory {
   reason?: string;
   timestamp: string;
   ipAddress?: string;
+  companyId?: string;
 }
 
 export type VehicleStatus = 'Available' | 'On Trip' | 'In Shop' | 'Retired';
@@ -828,6 +842,7 @@ function mapUserToDB(u: User) {
     full_name: u.fullName,
     role: u.role,
     approval_status: u.approvalStatus,
+    company_id: u.companyId || null,
     first_name: u.firstName,
     last_name: u.lastName,
     profile_photo: u.profilePhoto,
@@ -856,6 +871,7 @@ function mapUserFromDB(u: any): User {
     fullName: u.full_name,
     role: u.role,
     approvalStatus: u.approval_status || 'Approved',
+    companyId: u.company_id || undefined,
     firstName: u.first_name || '',
     lastName: u.last_name || '',
     profilePhoto: u.profile_photo || '',
@@ -887,16 +903,31 @@ function mapHistoryFromDB(h: any): UserApprovalHistory {
     newStatus: h.new_status,
     reason: h.reason || '',
     timestamp: h.timestamp,
-    ipAddress: h.ip_address || ''
+    ipAddress: h.ip_address || '',
+    companyId: h.company_id || undefined
+  };
+}
+
+function mapCompanyFromDB(c: any): Company {
+  return {
+    id: c.id,
+    name: c.name,
+    status: c.status,
+    industry: c.industry || '',
+    companySize: c.company_size || '',
+    createdAt: c.created_at,
+    activatedAt: c.activated_at || undefined,
+    createdByAdminUserId: c.created_by_admin_user_id || undefined
   };
 }
 
 
-async function supabaseSync(table: string, action: 'insert' | 'update' | 'delete', data: any, id?: string) {
+async function supabaseSync(table: string, action: 'insert' | 'update' | 'delete', data: any, id?: string, companyId?: string) {
   if (!isSupabaseConfigured || !supabase) return;
   try {
+    const payload = (action === 'insert' && companyId) ? { ...data, company_id: companyId } : data;
     if (action === 'insert') {
-      const { error } = await supabase.from(table).insert(data);
+      const { error } = await supabase.from(table).insert(payload);
       if (error) console.error(`Supabase Insert error on ${table}:`, error);
     } else if (action === 'update') {
       const { error } = await supabase.from(table).update(data).eq('id', id);
@@ -929,6 +960,8 @@ function generateUUID(): string {
 interface TransitState {
   currentUser: User | null;
   users: User[];
+  companies: Company[];
+  currentCompany: Company | null;
   vehicles: Vehicle[];
   drivers: Driver[];
   trips: Trip[];
@@ -941,6 +974,10 @@ interface TransitState {
   userApprovalHistory: UserApprovalHistory[];
   rememberMe: boolean;
   authLoading: boolean;
+
+  // Company Actions
+  registerCompany: (companyName: string, industry: string, companySize: string, adminPayload: Omit<User, 'id' | 'approvalStatus' | 'companyId'>, password?: string) => Promise<{ success: boolean; message: string }>;
+  fetchCompanies: () => Promise<Company[]>;
 
   // Authentication Actions
   login: (email: string, role?: UserRole) => boolean; // Keep for fallback compatibility
@@ -1011,6 +1048,8 @@ export const useTransitStore = create<TransitState>()(
     (set, get) => ({
       currentUser: null,
       users: seedUsers,
+      companies: [],
+      currentCompany: null,
       vehicles: seedVehicles,
       drivers: seedDrivers,
       trips: seedTrips,
@@ -1027,6 +1066,88 @@ export const useTransitStore = create<TransitState>()(
       setRememberMe: (val) => set({ rememberMe: val }),
       setCurrentUser: (user) => set({ currentUser: user }),
       setAuthLoading: (val) => set({ authLoading: val }),
+
+      // --- Company Actions ---
+      registerCompany: async (companyName, industry, companySize, adminPayload, password = 'password123') => {
+        set({ authLoading: true });
+        try {
+          const companyId = generateUUID();
+          const adminUserId = generateUUID();
+
+          // 1. Register in Firebase
+          if (isFirebaseConfigured && auth) {
+            await createUserWithEmailAndPassword(auth, adminPayload.email, password);
+          }
+
+          // 2. Insert company into Supabase
+          if (isSupabaseConfigured && supabase) {
+            const { error: companyError } = await supabase.from('companies').insert({
+              id: companyId,
+              name: companyName,
+              status: 'active',
+              industry: industry,
+              company_size: companySize,
+              activated_at: new Date().toISOString(),
+              created_by_admin_user_id: adminUserId
+            });
+            if (companyError) throw new Error(`Failed to create company: ${companyError.message}`);
+          }
+
+          // 3. Create Admin User linked to this company
+          const adminUser: User = {
+            ...adminPayload,
+            id: adminUserId,
+            role: 'Administrator',
+            approvalStatus: 'Approved',
+            companyId: companyId,
+            lastStatusChange: new Date().toISOString()
+          };
+
+          set((state) => ({
+            users: [...state.users, adminUser],
+            companies: [...state.companies, {
+              id: companyId,
+              name: companyName,
+              status: 'active' as CompanyStatus,
+              industry,
+              companySize,
+              createdAt: new Date().toISOString(),
+              activatedAt: new Date().toISOString(),
+              createdByAdminUserId: adminUserId
+            }]
+          }));
+
+          if (isSupabaseConfigured && supabase) {
+            await supabase.from('users').insert(mapUserToDB(adminUser));
+          }
+
+          get().logAction('Company Registration', `New company "${companyName}" registered by admin ${adminPayload.email}`);
+
+          set({ authLoading: false });
+          return { success: true, message: `Company "${companyName}" has been created successfully. You are now the Company Administrator.` };
+        } catch (err: any) {
+          console.error('Company registration error:', err);
+          set({ authLoading: false });
+          return { success: false, message: err?.message || 'Failed to register company.' };
+        }
+      },
+
+      fetchCompanies: async () => {
+        if (!isSupabaseConfigured || !supabase) return get().companies;
+        try {
+          const { data, error } = await supabase
+            .from('companies')
+            .select('*')
+            .eq('status', 'active');
+          if (error) throw error;
+          const companies = data ? data.map(mapCompanyFromDB) : [];
+          set({ companies });
+          return companies;
+        } catch (err) {
+          console.error('Failed to fetch companies:', err);
+          return [];
+        }
+      },
 
       login: (email, selectedRole) => {
         const emailLower = email.toLowerCase().trim();
@@ -1100,7 +1221,9 @@ export const useTransitStore = create<TransitState>()(
             throw new Error('Your account is inactive. Please contact your administrator.');
           }
 
-          set({ currentUser: user, authLoading: false });
+          // Resolve company for the logged-in user
+          const userCompany = user.companyId ? get().companies.find(c => c.id === user.companyId) || null : null;
+          set({ currentUser: user, currentCompany: userCompany, authLoading: false });
           get().logAction('User Login', `User ${user.email} logged in with role ${user.role} (Firebase/Email)`);
           return true;
         } catch (err) {
@@ -1164,7 +1287,9 @@ export const useTransitStore = create<TransitState>()(
             throw new Error('Your account is inactive. Please contact your administrator.');
           }
 
-          set({ currentUser: user, authLoading: false });
+          // Resolve company for the logged-in user
+          const userCompany = user.companyId ? get().companies.find(c => c.id === user.companyId) || null : null;
+          set({ currentUser: user, currentCompany: userCompany, authLoading: false });
           get().logAction('User Login', `User ${user.email} logged in with role ${user.role} (Firebase/Google)`);
           return true;
         } catch (err) {
@@ -1463,7 +1588,7 @@ export const useTransitStore = create<TransitState>()(
         get().logAction('Create Vehicle', `Added vehicle ${newVeh.registrationNumber} (${newVeh.name})`);
         
         // Async Supabase Sync
-        supabaseSync('vehicles', 'insert', mapVehicleToDB(newVeh));
+        supabaseSync('vehicles', 'insert', mapVehicleToDB(newVeh), undefined, get().currentUser?.companyId);
         
         return { success: true, message: 'Vehicle added successfully.' };
       },
@@ -1507,7 +1632,7 @@ export const useTransitStore = create<TransitState>()(
           heading: heading,
           source: 'telematics',
           recorded_at: new Date().toISOString()
-        });
+        }, undefined, get().currentUser?.companyId);
       },
 
       deleteVehicle: (id) => {
@@ -1550,7 +1675,7 @@ export const useTransitStore = create<TransitState>()(
         get().logAction('Create Driver', `Added driver ${newDrv.name}`);
 
         // Async Supabase Sync
-        supabaseSync('drivers', 'insert', mapDriverToDB(newDrv));
+        supabaseSync('drivers', 'insert', mapDriverToDB(newDrv), undefined, get().currentUser?.companyId);
 
         return { success: true, message: 'Driver added successfully.' };
       },
@@ -1620,7 +1745,7 @@ export const useTransitStore = create<TransitState>()(
         get().logAction('Create Trip', `Created draft trip from ${trip.source} to ${trip.destination}`);
         
         // Async Supabase Sync
-        supabaseSync('trips', 'insert', mapTripToDB(newTrip));
+        supabaseSync('trips', 'insert', mapTripToDB(newTrip), undefined, get().currentUser?.companyId);
 
         return { success: true, message: 'Trip created in draft status.' };
       },
@@ -1857,7 +1982,7 @@ export const useTransitStore = create<TransitState>()(
         });
 
         // Async Supabase Sync
-        supabaseSync('maintenance_logs', 'insert', mapMaintenanceToDB(newLog));
+        supabaseSync('maintenance_logs', 'insert', mapMaintenanceToDB(newLog), undefined, get().currentUser?.companyId);
         if (vehicle) supabaseSync('vehicles', 'update', mapVehicleToDB({ ...vehicle, status: 'In Shop' }), log.vehicleId);
 
         return { success: true, message: 'Maintenance record created.' };
@@ -1947,7 +2072,7 @@ export const useTransitStore = create<TransitState>()(
         get().logAction('Log Fuel Refill', `Added fuel log of $${log.fuelCost} for vehicle ${vehicle?.registrationNumber || ''}`);
 
         // Async Supabase Sync
-        supabaseSync('fuel_logs', 'insert', mapFuelToDB(newLog));
+        supabaseSync('fuel_logs', 'insert', mapFuelToDB(newLog), undefined, get().currentUser?.companyId);
 
         return { success: true, message: 'Fuel log and associated expense recorded successfully.' };
       },
@@ -1964,7 +2089,7 @@ export const useTransitStore = create<TransitState>()(
         }));
 
         // Async Supabase Sync
-        supabaseSync('expenses', 'insert', mapExpenseToDB(newExpense));
+        supabaseSync('expenses', 'insert', mapExpenseToDB(newExpense), undefined, get().currentUser?.companyId);
 
         return { success: true, message: 'Expense recorded.' };
       },
@@ -2003,7 +2128,7 @@ export const useTransitStore = create<TransitState>()(
         get().logAction('Add Document', `Uploaded document "${doc.name}"`);
 
         // Async Supabase Sync
-        supabaseSync('documents', 'insert', mapDocumentToDB(newDoc));
+        supabaseSync('documents', 'insert', mapDocumentToDB(newDoc), undefined, get().currentUser?.companyId);
 
         return { success: true, message: 'Document added.' };
       },
@@ -2038,7 +2163,7 @@ export const useTransitStore = create<TransitState>()(
         }));
 
         // Async Supabase Sync
-        supabaseSync('notifications', 'insert', mapNotificationToDB(newNotif));
+        supabaseSync('notifications', 'insert', mapNotificationToDB(newNotif), undefined, get().currentUser?.companyId);
       },
 
       markNotificationRead: (id) => {
@@ -2078,7 +2203,7 @@ export const useTransitStore = create<TransitState>()(
         }));
 
         // Async Supabase Sync
-        supabaseSync('audit_logs', 'insert', mapAuditToDB(newLog));
+        supabaseSync('audit_logs', 'insert', mapAuditToDB(newLog), undefined, get().currentUser?.companyId);
       },
 
       resetStore: () => {
@@ -2117,7 +2242,8 @@ export const useTransitStore = create<TransitState>()(
             { data: dbDocs },
             { data: dbNotifs },
             { data: dbAudits },
-            { data: dbHistory }
+            { data: dbHistory },
+            { data: dbCompanies }
           ] = await Promise.all([
             supabase.from('users').select('*'),
             supabase.from('vehicles').select('*'),
@@ -2129,12 +2255,15 @@ export const useTransitStore = create<TransitState>()(
             supabase.from('documents').select('*'),
             supabase.from('notifications').select('*'),
             supabase.from('audit_logs').select('*').order('timestamp', { ascending: false }),
-            supabase.from('user_approval_history').select('*').order('timestamp', { ascending: false })
+            supabase.from('user_approval_history').select('*').order('timestamp', { ascending: false }),
+            supabase.from('companies').select('*')
           ]);
 
           const fetchedUsers = dbUsers ? dbUsers.map(mapUserFromDB) : [];
+          const fetchedCompanies = dbCompanies ? dbCompanies.map(mapCompanyFromDB) : [];
           const currentLoggedUser = get().currentUser;
           let updatedCurrentUser = currentLoggedUser;
+          let updatedCurrentCompany: Company | null = get().currentCompany;
           
           if (currentLoggedUser) {
             const matched = fetchedUsers.find(
@@ -2142,12 +2271,18 @@ export const useTransitStore = create<TransitState>()(
             );
             if (matched) {
               updatedCurrentUser = matched;
+              // Set currentCompany based on the user's company_id
+              if (matched.companyId) {
+                updatedCurrentCompany = fetchedCompanies.find(c => c.id === matched.companyId) || null;
+              }
             }
           }
 
           set({
             users: fetchedUsers,
             currentUser: updatedCurrentUser,
+            companies: fetchedCompanies,
+            currentCompany: updatedCurrentCompany,
             vehicles: dbVehicles ? dbVehicles.map(mapVehicleFromDB) : [],
             drivers: dbDrivers ? dbDrivers.map(mapDriverFromDB) : [],
             trips: dbTrips ? dbTrips.map(mapTripFromDB) : [],
@@ -2169,6 +2304,8 @@ export const useTransitStore = create<TransitState>()(
       partialize: (state) => ({
         currentUser: state.currentUser,
         users: state.users,
+        companies: state.companies,
+        currentCompany: state.currentCompany,
         vehicles: state.vehicles,
         drivers: state.drivers,
         trips: state.trips,

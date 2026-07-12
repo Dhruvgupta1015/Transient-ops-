@@ -173,12 +173,12 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Title */}
-      <div className="flex items-center justify-between border-b border-[#eaebf0] pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#eaebf0] pb-4">
         <div>
           <h2 className="text-lg font-bold tracking-tight text-slate-800 font-sans">HQ Operations Control Console</h2>
           <p className="text-xs text-slate-400">Integrated vehicle metrics, real-time trip trackers, and logistics audits.</p>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
             onClick={() => setShowReportModal(true)}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors cursor-pointer shadow-sm"

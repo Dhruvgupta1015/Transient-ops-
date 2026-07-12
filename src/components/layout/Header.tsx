@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useTransitStore } from '@/lib/store/transitStore';
-import { Bell, Search, Sun, Moon, Check, ShieldAlert, ChevronDown, Languages, CloudSun } from 'lucide-react';
+import { Bell, Search, Sun, Moon, Check, ShieldAlert, ChevronDown, Languages, CloudSun, Menu } from 'lucide-react';
+import { useSidebar } from '@/app/(dashboard)/layout';
 
 export function Header() {
   const { notifications, markNotificationRead, markAllNotificationsRead, currentUser } = useTransitStore();
+  const { isMobileOpen, setMobileOpen } = useSidebar();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showWorkspaceDropdown, setShowWorkspaceDropdown] = useState(false);
   const [selectedWorkspace, setSelectedWorkspace] = useState('Seoul Hub Operations');
@@ -28,10 +30,19 @@ export function Header() {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
-    <header className="h-16 border-b border-[#e2e8f0] dark:border-[#2a2c35] bg-white dark:bg-[#1e293b] px-6 flex items-center justify-between shrink-0 select-none relative z-20 transition-colors duration-200">
+    <header className="h-16 border-b border-[#e2e8f0] dark:border-[#2a2c35] bg-white dark:bg-[#1e293b] px-4 md:px-6 flex items-center justify-between shrink-0 select-none relative z-20 transition-colors duration-200">
       
       {/* Workspace Switcher & Search */}
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-2 md:gap-6">
+        {/* Mobile Toggle Button */}
+        <button 
+          onClick={() => setMobileOpen(!isMobileOpen)}
+          className="h-8 w-8 rounded-xl border border-[#e2e8f0] dark:border-[#2a2c35] flex lg:hidden items-center justify-center text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer mr-1 transition-all"
+          title="Toggle Menu"
+        >
+          <Menu size={16} />
+        </button>
+
         {/* Workspace Switcher */}
         <div className="relative">
           <button 
