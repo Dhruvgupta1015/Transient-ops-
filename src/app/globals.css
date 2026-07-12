@@ -1,78 +1,80 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  /* Korean Enterprise Theme - Light Mode */
+  --background: #fcfbfa; /* Warm white background */
+  --foreground: #2d3142; /* Soft charcoal text */
   
   --card: #ffffff;
-  --card-foreground: #0f172a;
+  --card-foreground: #2d3142;
   
   --popover: #ffffff;
-  --popover-foreground: #0f172a;
+  --popover-foreground: #2d3142;
   
-  --primary: #0f172a;
-  --primary-foreground: #f8fafc;
+  --primary: #86a3c3; /* Serene soft blue */
+  --primary-foreground: #ffffff;
   
-  --secondary: #f1f5f9;
-  --secondary-foreground: #0f172a;
+  --secondary: #f4eaed; /* Cherry blossom blush background */
+  --secondary-foreground: #8a6a7c;
   
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
+  --muted: #f4f5f7;
+  --muted-foreground: #8b92a5;
   
-  --accent: #f1f5f9;
-  --accent-foreground: #0f172a;
+  --accent: #f0f2f5;
+  --accent-foreground: #4a5568;
   
-  --destructive: #ef4444;
-  --destructive-foreground: #f8fafc;
+  --destructive: #eb8c96; /* Pastel pink-red */
+  --destructive-foreground: #ffffff;
 
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #0f172a;
-  --radius: 0.75rem;
+  --border: #eaebf0;
+  --input: #eaebf0;
+  --ring: #86a3c3;
+  --radius: 1rem; /* Softer, rounder corners */
 
-  --success: #10b981;
-  --warning: #f59e0b;
-  --info: #3b82f6;
+  --success: #88c9a1; /* Pastel mint green */
+  --warning: #f2c779; /* Soft golden yellow */
+  --info: #8eb1e5;    /* Sky blue */
 }
 
 .dark {
-  --background: #020617;
-  --foreground: #f8fafc;
+  /* Korean Theme - Optional Dark Mode */
+  --background: #18191f;
+  --foreground: #f4f5f7;
   
-  --card: #0b1329;
-  --card-foreground: #f8fafc;
+  --card: #20222a;
+  --card-foreground: #f4f5f7;
   
-  --popover: #0b1329;
-  --popover-foreground: #f8fafc;
+  --popover: #20222a;
+  --popover-foreground: #f4f5f7;
   
-  --primary: #cbd5e1;
-  --primary-foreground: #020617;
+  --primary: #a1b8d4;
+  --primary-foreground: #18191f;
   
-  --secondary: #1e293b;
-  --secondary-foreground: #f8fafc;
+  --secondary: #322b30;
+  --secondary-foreground: #ebd3df;
   
-  --muted: #1e293b;
-  --muted-foreground: #94a3b8;
+  --muted: #2a2c35;
+  --muted-foreground: #9ca3af;
   
-  --accent: #1e293b;
-  --accent-foreground: #f8fafc;
+  --accent: #2a2c35;
+  --accent-foreground: #f4f5f7;
   
-  --destructive: #ef4444;
-  --destructive-foreground: #f8fafc;
+  --destructive: #e67e8a;
+  --destructive-foreground: #f4f5f7;
 
-  --border: #1e293b;
-  --input: #1e293b;
-  --ring: #94a3b8;
+  --border: #2a2c35;
+  --input: #2a2c35;
+  --ring: #a1b8d4;
 
-  --success: #10b981;
-  --warning: #f59e0b;
-  --info: #3b82f6;
+  --success: #76bc94;
+  --warning: #eab75c;
+  --info: #7da5df;
 }
 
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Pretendard', 'SUIT', var(--font-sans), 'Noto Sans KR', system-ui, -apple-system, sans-serif;
   overflow-x: hidden;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
@@ -158,4 +160,45 @@ body {
 .status-pulse-red {
   animation: status-pulse 2s infinite ease-in-out;
   background-color: var(--destructive);
+}
+
+/* --- Enterprise Premium UI Utilities --- */
+
+/* Fluid Hover Lift */
+.hover-lift {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.12), 0 4px 12px -3px rgba(0, 0, 0, 0.08);
+}
+.dark .hover-lift:hover {
+  box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.6), 0 4px 12px -3px rgba(0, 0, 0, 0.4);
+}
+
+/* Premium Gradient Cards */
+.premium-gradient-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.85));
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04);
+}
+.dark .premium-gradient-card {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.8), rgba(2, 6, 23, 0.6));
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(51, 65, 85, 0.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* Text Gradient Highlights */
+.text-gradient {
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-image: linear-gradient(90deg, #2563eb, #0ea5e9);
+}
+.dark .text-gradient {
+  background-image: linear-gradient(90deg, #60a5fa, #38bdf8);
 }

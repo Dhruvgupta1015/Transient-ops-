@@ -28,6 +28,10 @@ export interface Vehicle {
   pollutionCert: string;
   imageUrl: string;
   status: VehicleStatus;
+  // Advanced Enterprise Fields
+  gpsLocation?: { lat: number; lng: number };
+  healthScore?: number; // 0 - 100
+  lifecycleStatus?: 'Active' | 'Approaching Retirement' | 'Retired';
 }
 
 export type DriverStatus = 'Available' | 'On Trip' | 'Off Duty' | 'Suspended';
@@ -44,6 +48,13 @@ export interface Driver {
   safetyScore: number; // 0 - 100
   assignedVehicleId: string | null;
   status: DriverStatus;
+  // Advanced Enterprise Fields
+  experienceYears?: number;
+  medicalCertExpiry?: string;
+  emergencyContact?: string;
+  driverRating?: number; // 0 - 5
+  fatigueLevel?: number; // 0 - 100
+  workingHoursWeekly?: number;
 }
 
 export type TripStatus = 'Draft' | 'Dispatched' | 'Completed' | 'Cancelled';

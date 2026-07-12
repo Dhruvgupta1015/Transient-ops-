@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from 'react';
 import { useTransitStore } from '@/lib/store/transitStore';
 import { 
   Truck, 
@@ -15,10 +16,12 @@ import {
   UserCheck,
   Percent,
   Clock,
-  Coins
+  Coins,
+  Download
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import dynamic from 'next/dynamic';
+import { ReportModal } from '@/components/reports/ReportModal';
 
 // Dynamically import Recharts to bypass Next.js SSR hydration mismatches
 const ResponsiveContainer = dynamic(() => import('recharts').then((mod) => mod.ResponsiveContainer), { ssr: false });
@@ -38,6 +41,7 @@ const Legend = dynamic(() => import('recharts').then((mod) => mod.Legend), { ssr
 
 export default function DashboardPage() {
   const { vehicles, drivers, trips, maintenanceLogs, fuelLogs, expenses, auditLogs } = useTransitStore();
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // --- 14 KPI CALCULATIONS ---
   const totalVehicles = vehicles.length;
@@ -121,61 +125,118 @@ export default function DashboardPage() {
     { week: 'W4', Revenue: totalRevenue * 0.35, Expenses: totalExpenses * 0.37 },
   ];
 
+  // Tiny inline SVG Sparkline helper
+  const Sparkline = ({ data, positive }: { data: number[], positive: boolean }) => {
+    if (!data || data.length === 0) return null;
+    const max = Math.max(...data);
+    const min = Math.min(...data);
+    const range = max - min === 0 ? 1 : max - min;
+    const width = 45;
+    const height = 12;
+    const points = data.map((val, index) => {
+      const x = (index / (data.length - 1)) * width;
+      const y = height - ((val - min) / range) * height;
+      return `${x},${y}`;
+    }).join(' ');
+
+    return (
+      <svg width={width} height={height} className="overflow-visible opacity-80">
+        <polyline
+          fill="none"
+          stroke={positive ? '#22c55e' : '#ef4444'}
+          strokeWidth="1.5"
+          points={points}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  };
+
   const kpis = [
-    { title: 'Active Vehicles', value: activeVehicles, sub: `out of ${activeFleetSize} active`, icon: Truck, color: 'text-indigo-500 bg-indigo-500/10' },
-    { title: 'Available Vehicles', value: availableVehicles, sub: 'ready for dispatch', icon: CheckCircle, color: 'text-emerald-500 bg-emerald-500/10' },
-    { title: 'In Maintenance', value: maintenanceVehicles, sub: 'currently in shop', icon: Wrench, color: 'text-amber-500 bg-amber-500/10' },
-    { title: 'Retired Fleet', value: retiredVehicles, sub: 'decommissioned', icon: ShieldAlert, color: 'text-slate-500 bg-slate-500/10' },
-    { title: 'Active Trips', value: activeTrips, sub: 'en-route tracking', icon: MapPin, color: 'text-blue-500 bg-blue-500/10' },
-    { title: 'Pending Trips', value: pendingTrips, sub: 'awaiting dispatch', icon: Clock, color: 'text-indigo-500 bg-indigo-500/10' },
-    { title: 'Completed Trips', value: completedTrips, sub: 'archived workflows', icon: CheckCircle, color: 'text-emerald-500 bg-emerald-500/10' },
-    { title: 'Drivers On Duty', value: driversOnDuty, sub: 'assigned / available', icon: UserCheck, color: 'text-cyan-500 bg-cyan-500/10' },
-    { title: 'Fleet Utilization', value: `${fleetUtilization}%`, sub: 'active vs capacity', icon: Percent, color: 'text-indigo-500 bg-indigo-500/10' },
-    { title: 'Fuel Cost', value: `$${totalFuelCost.toLocaleString()}`, sub: 'logged fuel bills', icon: Droplet, color: 'text-rose-500 bg-rose-500/10' },
-    { title: 'Maintenance Cost', value: `$${totalMaintenanceCost.toLocaleString()}`, sub: 'repair bills', icon: Wrench, color: 'text-amber-500 bg-amber-500/10' },
-    { title: 'Total Revenue', value: `$${totalRevenue.toLocaleString()}`, sub: 'freight billing', icon: DollarSign, color: 'text-emerald-500 bg-emerald-500/10' },
-    { title: 'Operating Profit', value: `$${profit.toLocaleString()}`, sub: 'net margin', icon: Coins, color: 'text-indigo-500 bg-indigo-500/10' },
-    { title: 'Vehicle ROI', value: `${vehicleROI}%`, sub: 'asset payback rate', icon: TrendingUp, color: 'text-purple-500 bg-purple-500/10' },
+    { title: 'Active Vehicles', value: activeVehicles, sub: `out of ${activeFleetSize}`, icon: Truck, trend: '+4.8%', trendUp: true, spark: [5, 6, 5, 7, 8], status: 'success' },
+    { title: 'Available Fleet', value: availableVehicles, sub: 'ready to dispatch', icon: CheckCircle, trend: '+2.1%', trendUp: true, spark: [12, 10, 11, 14, 15], status: 'success' },
+    { title: 'In Maintenance', value: maintenanceVehicles, sub: 'in workshops', icon: Wrench, trend: '-1.5%', trendUp: true, spark: [4, 3, 5, 2, 1], status: 'warning' },
+    { title: 'Retired Vehicles', value: retiredVehicles, sub: 'decommissioned', icon: ShieldAlert, trend: '0.0%', trendUp: true, spark: [0, 0, 0, 0, 0], status: 'neutral' },
+    { title: 'Active Trips', value: activeTrips, sub: 'on schedule', icon: MapPin, trend: '+8.4%', trendUp: true, spark: [3, 4, 6, 7, 9], status: 'success' },
+    { title: 'Pending Trips', value: pendingTrips, sub: 'assigned route', icon: Clock, trend: '-3.1%', trendUp: false, spark: [5, 4, 3, 2, 2], status: 'warning' },
+    { title: 'Completed Trips', value: completedTrips, sub: 'successful deliveries', icon: CheckCircle, trend: '+12.4%', trendUp: true, spark: [40, 42, 45, 48, 52], status: 'success' },
+    { title: 'Drivers On Duty', value: driversOnDuty, sub: 'available', icon: UserCheck, trend: '+1.5%', trendUp: true, spark: [14, 15, 14, 16, 16], status: 'success' },
+    { title: 'Fleet Utilization', value: `${fleetUtilization}%`, sub: 'active capacity', icon: Percent, trend: '+5.2%', trendUp: true, spark: [72, 74, 73, 76, 78], status: 'success' },
+    { title: 'Fuel Expenditure', value: `$${totalFuelCost.toLocaleString()}`, sub: 'cumulative', icon: Droplet, trend: '+1.8%', trendUp: false, spark: [1200, 1400, 1100, 1500, 1300], status: 'warning' },
+    { title: 'Maintenance Cost', value: `$${totalMaintenanceCost.toLocaleString()}`, sub: 'service log', icon: Wrench, trend: '-2.4%', trendUp: true, spark: [800, 750, 900, 600, 500], status: 'success' },
+    { title: 'Total Revenue', value: `$${totalRevenue.toLocaleString()}`, sub: 'invoiced', icon: DollarSign, trend: '+14.2%', trendUp: true, spark: [25000, 28000, 27000, 31000, 34000], status: 'success' },
+    { title: 'Operating Profit', value: `$${profit.toLocaleString()}`, sub: 'net margin', icon: Coins, trend: '+16.8%', trendUp: true, spark: [8000, 9500, 9000, 11000, 12400], status: 'success' },
+    { title: 'Asset ROI', value: `${vehicleROI}%`, sub: 'payback curve', icon: TrendingUp, trend: '+0.5%', trendUp: true, spark: [8.1, 8.2, 8.3, 8.5, 8.8], status: 'success' },
   ];
 
   return (
     <div className="space-y-6">
       {/* Title */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between border-b border-[#eaebf0] pb-4">
         <div>
-          <h2 className="text-xl font-bold tracking-tight">Command Center Dashboard</h2>
-          <p className="text-xs text-muted-foreground">Real-time status updates and operational analytics.</p>
+          <h2 className="text-lg font-bold tracking-tight text-slate-800 font-sans">HQ Operations Control Console</h2>
+          <p className="text-xs text-slate-400">Integrated vehicle metrics, real-time trip trackers, and logistics audits.</p>
         </div>
-        <div className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 border border-indigo-500/20">
-          Live Tracking Enabled
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => setShowReportModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors cursor-pointer shadow-sm"
+          >
+            <Download size={13} />
+            <span>Download Complete Analysis</span>
+          </button>
+          <div className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-100 flex items-center gap-1.5 shadow-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+            <span>Real-time Sync Active</span>
+          </div>
         </div>
       </div>
 
       {/* KPIs Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
         {kpis.map((kpi, idx) => (
           <motion.div
             key={kpi.title}
-            initial={{ opacity: 0, y: 15 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: idx * 0.03 }}
-            className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-2xl flex flex-col justify-between shadow-sm relative overflow-hidden group hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200"
+            transition={{ delay: idx * 0.02 }}
+            className="p-3.5 bg-white dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#2a2c35] rounded-xl flex flex-col justify-between hover:border-blue-200 dark:hover:border-blue-900 hover:shadow-[0_4px_16px_rgba(0,0,0,0.02)] transition-all duration-200 group relative"
           >
-            <div className="flex justify-between items-start mb-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground leading-tight">
-                {kpi.title}
-              </span>
-              <div className={`p-1.5 rounded-lg ${kpi.color}`}>
-                <kpi.icon size={12} />
+            {/* Top Row: Icon & Status indicator */}
+            <div className="flex justify-between items-start mb-2.5">
+              <div className="p-1 rounded bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 shrink-0">
+                <kpi.icon size={13} />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className={`text-[9px] font-bold ${kpi.trendUp ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                  {kpi.trend}
+                </span>
+                <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                  kpi.status === 'success' ? 'bg-green-500' : 
+                  kpi.status === 'warning' ? 'bg-amber-500' : 'bg-slate-300'
+                }`} />
               </div>
             </div>
+            
+            {/* Middle Row: Title & Value */}
             <div>
-              <h3 className="text-lg font-bold tracking-tight text-slate-950 dark:text-white leading-tight">
+              <span className="text-[10px] font-medium text-slate-400 block truncate mb-0.5">
+                {kpi.title}
+              </span>
+              <h3 className="text-base font-bold tracking-tight text-slate-800 dark:text-white leading-tight">
                 {kpi.value}
               </h3>
-              <p className="text-[9px] text-muted-foreground font-medium mt-1 truncate">
+            </div>
+
+            {/* Bottom Row: Sparkline */}
+            <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-50 dark:border-slate-800/40">
+              <span className="text-[9px] text-slate-400 truncate max-w-[45%]">
                 {kpi.sub}
-              </p>
+              </span>
+              <div className="shrink-0">
+                <Sparkline data={kpi.spark} positive={kpi.trendUp} />
+              </div>
             </div>
           </motion.div>
         ))}
@@ -184,7 +245,7 @@ export default function DashboardPage() {
       {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Utilization Area Trend */}
-        <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-2xl shadow-sm">
+        <div className="p-5 bg-white dark:bg-[#1e293b] border border-[#e5e7eb] dark:border-[#334155] rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
           <div className="mb-4">
             <h4 className="text-sm font-bold">Fleet Utilization Trend</h4>
             <p className="text-[10px] text-muted-foreground">Historical active vs capacity ratio</p>
@@ -208,7 +269,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Expenses Pie Chart */}
-        <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-2xl shadow-sm">
+        <div className="p-5 bg-white dark:bg-[#1e293b] border border-[#e5e7eb] dark:border-[#334155] rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
           <div className="mb-4">
             <h4 className="text-sm font-bold">Operating Expense Breakdown</h4>
             <p className="text-[10px] text-muted-foreground">Grouped by active expense categories</p>
@@ -255,7 +316,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Fuel Consumption Bar Chart */}
-        <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-2xl shadow-sm">
+        <div className="p-5 bg-white dark:bg-[#1e293b] border border-[#e5e7eb] dark:border-[#334155] rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
           <div className="mb-4">
             <h4 className="text-sm font-bold">Fuel Efficiency & Cost by Vehicle Type</h4>
             <p className="text-[10px] text-muted-foreground">Comparative operational output</p>
@@ -279,7 +340,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Weekly Financial Progress Line Chart */}
-        <div className="p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-2xl shadow-sm">
+        <div className="p-5 bg-white dark:bg-[#1e293b] border border-[#e5e7eb] dark:border-[#334155] rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
           <div className="mb-4">
             <h4 className="text-sm font-bold">Weekly Performance Curve</h4>
             <p className="text-[10px] text-muted-foreground">Revenue billing vs operational cost flow</p>
@@ -302,7 +363,7 @@ export default function DashboardPage() {
       {/* Bottom Grid: Audit Log & Notifications */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Audit trail */}
-        <div className="lg:col-span-2 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 rounded-2xl shadow-sm">
+        <div className="lg:col-span-2 p-5 bg-white dark:bg-[#1e293b] border border-[#e5e7eb] dark:border-[#334155] rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
           <div className="mb-3.5 flex justify-between items-center">
             <div>
               <h4 className="text-sm font-bold">System Audit Logs</h4>
@@ -369,6 +430,8 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+      {/* Report Modal */}
+      <ReportModal isOpen={showReportModal} onClose={() => setShowReportModal(false)} />
     </div>
   );
 }

@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from 'react';
 import { useTransitStore } from '@/lib/store/transitStore';
-import { Award, TrendingUp, Sparkles, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Award, TrendingUp, Sparkles, AlertTriangle, ShieldCheck, Download } from 'lucide-react';
 import dynamic from 'next/dynamic';
+import { ReportModal } from '@/components/reports/ReportModal';
 
 const ResponsiveContainer = dynamic(() => import('recharts').then((mod) => mod.ResponsiveContainer), { ssr: false });
 const BarChart = dynamic(() => import('recharts').then((mod) => mod.BarChart), { ssr: false });
@@ -16,6 +18,7 @@ const Line = dynamic(() => import('recharts').then((mod) => mod.Line), { ssr: fa
 
 export default function AnalyticsPage() {
   const { vehicles, drivers, trips, maintenanceLogs, fuelLogs, expenses } = useTransitStore();
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // 1. Calculate individual vehicle ROI rank
   const vehicleRoiData = vehicles.map((v) => {
@@ -57,14 +60,23 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-6">
       {/* Title */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center border-b border-[#eaebf0] pb-4">
         <div>
-          <h2 className="text-xl font-bold tracking-tight">Advanced Platform Analytics</h2>
-          <p className="text-xs text-muted-foreground font-medium">Evaluate machine learning route estimates, asset returns, and driver safety index scores.</p>
+          <h2 className="text-lg font-bold tracking-tight text-slate-800">Advanced Platform Analytics</h2>
+          <p className="text-xs text-slate-400 font-medium">Evaluate asset returns, operational cost trends, and driver safety index scores.</p>
         </div>
-        <div className="px-3 py-1.5 rounded-xl bg-indigo-500/10 text-indigo-500 text-xs font-semibold flex items-center gap-1">
-          <Sparkles size={13} />
-          Predictive Models Active
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => setShowReportModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors cursor-pointer shadow-sm"
+          >
+            <Download size={13} />
+            <span>Download Complete Analysis</span>
+          </button>
+          <div className="px-3 py-1.5 rounded-xl bg-indigo-500/10 text-indigo-500 text-xs font-semibold flex items-center gap-1">
+            <Sparkles size={13} />
+            Predictive Models Active
+          </div>
         </div>
       </div>
 
@@ -165,6 +177,8 @@ export default function AnalyticsPage() {
           </tbody>
         </table>
       </div>
+      {/* Report Modal */}
+      <ReportModal isOpen={showReportModal} onClose={() => setShowReportModal(false)} />
     </div>
   );
 }
