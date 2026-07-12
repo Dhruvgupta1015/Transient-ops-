@@ -789,6 +789,25 @@ function mapAuditFromDB(a: any): AuditLog {
   };
 }
 
+function mapUserToDB(u: User) {
+  return {
+    id: u.id,
+    email: u.email,
+    full_name: u.fullName,
+    role: u.role,
+  };
+}
+
+function mapUserFromDB(u: any): User {
+  return {
+    id: u.id,
+    email: u.email,
+    fullName: u.full_name,
+    role: u.role,
+  };
+}
+
+
 async function supabaseSync(table: string, action: 'insert' | 'update' | 'delete', data: any, id?: string) {
   if (!isSupabaseConfigured || !supabase) return;
   try {
@@ -1720,6 +1739,7 @@ export const useTransitStore = create<TransitState>()(
         if (!isSupabaseConfigured || !supabase) return;
         try {
           const [
+            { data: dbUsers },
             { data: dbVehicles },
             { data: dbDrivers },
             { data: dbTrips },
@@ -1730,6 +1750,7 @@ export const useTransitStore = create<TransitState>()(
             { data: dbNotifs },
             { data: dbAudits }
           ] = await Promise.all([
+            supabase.from('users').select('*'),
             supabase.from('vehicles').select('*'),
             supabase.from('drivers').select('*'),
             supabase.from('trips').select('*'),
@@ -1742,6 +1763,7 @@ export const useTransitStore = create<TransitState>()(
           ]);
 
           set({
+            users: dbUsers ? dbUsers.map(mapUserFromDB) : [],
             vehicles: dbVehicles ? dbVehicles.map(mapVehicleFromDB) : [],
             drivers: dbDrivers ? dbDrivers.map(mapDriverFromDB) : [],
             trips: dbTrips ? dbTrips.map(mapTripFromDB) : [],
