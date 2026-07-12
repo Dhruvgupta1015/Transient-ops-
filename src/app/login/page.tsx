@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -58,11 +59,14 @@ export default function LoginPage() {
     },
   });
 
+  const [showResubmitLink, setShowResubmitLink] = useState(false);
+  const [resubmitEmail, setResubmitEmail] = useState('');
   const selectedRole = watch('role');
 
   const onSubmit = async (data: LoginFormValues) => {
     setLoading(true);
     setError(null);
+    setShowResubmitLink(false);
     try {
       const success = await loginWithEmail(data.email, data.role, data.password);
       if (success) {
@@ -72,7 +76,12 @@ export default function LoginPage() {
         setError('Invalid credentials or role mismatch.');
       }
     } catch (err: any) {
-      setError(err?.message || 'Authentication failed. Please verify your credentials.');
+      const errMsg = err?.message || 'Authentication failed. Please verify your credentials.';
+      setError(errMsg);
+      if (errMsg.includes('Additional Information Required')) {
+        setShowResubmitLink(true);
+        setResubmitEmail(data.email);
+      }
     } finally {
       setLoading(false);
     }
@@ -152,9 +161,21 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <div className="flex items-center gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-              <ShieldAlert className="h-5 w-5 shrink-0" />
-              <span>{error}</span>
+            <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm space-y-2">
+              <div className="flex items-center gap-3">
+                <ShieldAlert className="h-5 w-5 shrink-0" />
+                <span>{error}</span>
+              </div>
+              {showResubmitLink && (
+                <div className="pt-2 border-t border-red-500/20">
+                  <Link
+                    href={`/signup?resubmit=true&email=${encodeURIComponent(resubmitEmail)}`}
+                    className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold underline block"
+                  >
+                    Click here to complete the resubmission form
+                  </Link>
+                </div>
+              )}
             </div>
           )}
 
@@ -258,6 +279,13 @@ export default function LoginPage() {
               Sign In with Google
             </button>
           </form>
+
+          <p className="text-center text-xs text-slate-400">
+            Don't have clearance?{' '}
+            <Link href="/signup" className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">
+              Request access clearance
+            </Link>
+          </p>
 
           {/* Presets panel for testing */}
           <div className="pt-6 border-t border-slate-800/60 space-y-3">

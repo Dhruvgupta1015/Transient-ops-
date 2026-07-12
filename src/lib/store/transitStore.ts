@@ -13,13 +13,45 @@ import {
 
 // --- TYPE DEFINITIONS ---
 
-export type UserRole = 'Administrator' | 'Fleet Manager' | 'Dispatcher' | 'Safety Officer' | 'Financial Analyst';
+export type UserRole = 'Administrator' | 'Fleet Manager' | 'Dispatcher' | 'Safety Officer' | 'Financial Analyst' | 'Driver' | 'Maintenance Manager' | 'Viewer' | 'Security';
+export type UserStatus = 'Pending Approval' | 'Approved' | 'Rejected' | 'Suspended' | 'Inactive' | 'Information Required';
 
 export interface User {
   id: string;
   email: string;
   fullName: string;
   role: UserRole;
+  approvalStatus: UserStatus;
+  firstName?: string;
+  lastName?: string;
+  profilePhoto?: string;
+  phoneNumber?: string;
+  employeeId?: string;
+  department?: string;
+  designation?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectedBy?: string;
+  rejectedAt?: string;
+  rejectionReason?: string;
+  approvalNotes?: string;
+  lastStatusChange?: string;
+  registrationIp?: string;
+  deviceInformation?: string;
+  browserInformation?: string;
+  requestedFieldsToEdit?: string[];
+}
+
+export interface UserApprovalHistory {
+  id: string;
+  userId: string;
+  administratorId?: string;
+  action: 'Approve' | 'Reject' | 'Suspend' | 'Reactivate' | 'Request Info';
+  previousStatus: string;
+  newStatus: string;
+  reason?: string;
+  timestamp: string;
+  ipAddress?: string;
 }
 
 export type VehicleStatus = 'Available' | 'On Trip' | 'In Shop' | 'Retired';
@@ -136,7 +168,7 @@ export interface Document {
 
 export interface Notification {
   id: string;
-  type: 'License Expiry' | 'Insurance Expiry' | 'Maintenance' | 'Fuel Refill' | 'Trip Delay' | 'Vehicle Breakdown';
+  type: 'License Expiry' | 'Insurance Expiry' | 'Maintenance' | 'Fuel Refill' | 'Trip Delay' | 'Vehicle Breakdown' | 'Registration' | 'Clearance';
   message: string;
   read: boolean;
   date: string;
@@ -153,11 +185,11 @@ export interface AuditLog {
 // --- INITIAL SEED DATA ---
 
 const seedUsers: User[] = [
-  { id: 'usr-1', email: 'admin@transitops.com', fullName: 'Sarah Jenkins', role: 'Administrator' },
-  { id: 'usr-2', email: 'manager@transitops.com', fullName: 'Dave Kovic', role: 'Fleet Manager' },
-  { id: 'usr-3', email: 'dispatcher@transitops.com', fullName: 'Jimmy McNulty', role: 'Dispatcher' },
-  { id: 'usr-4', email: 'safety@transitops.com', fullName: 'Kima Greggs', role: 'Safety Officer' },
-  { id: 'usr-5', email: 'finance@transitops.com', fullName: 'Lester Freamon', role: 'Financial Analyst' },
+  { id: 'usr-1', email: 'admin@transitops.com', fullName: 'Sarah Jenkins', role: 'Administrator', approvalStatus: 'Approved' },
+  { id: 'usr-2', email: 'manager@transitops.com', fullName: 'Dave Kovic', role: 'Fleet Manager', approvalStatus: 'Approved' },
+  { id: 'usr-3', email: 'dispatcher@transitops.com', fullName: 'Jimmy McNulty', role: 'Dispatcher', approvalStatus: 'Approved' },
+  { id: 'usr-4', email: 'safety@transitops.com', fullName: 'Kima Greggs', role: 'Safety Officer', approvalStatus: 'Approved' },
+  { id: 'usr-5', email: 'finance@transitops.com', fullName: 'Lester Freamon', role: 'Financial Analyst', approvalStatus: 'Approved' },
 ];
 
 const seedVehicles: Vehicle[] = [
@@ -795,6 +827,25 @@ function mapUserToDB(u: User) {
     email: u.email,
     full_name: u.fullName,
     role: u.role,
+    approval_status: u.approvalStatus,
+    first_name: u.firstName,
+    last_name: u.lastName,
+    profile_photo: u.profilePhoto,
+    phone_number: u.phoneNumber,
+    employee_id: u.employeeId,
+    department: u.department,
+    designation: u.designation,
+    approved_by: u.approvedBy,
+    approved_at: u.approvedAt,
+    rejected_by: u.rejectedBy,
+    rejected_at: u.rejectedAt,
+    rejection_reason: u.rejectionReason,
+    approval_notes: u.approvalNotes,
+    last_status_change: u.lastStatusChange,
+    registration_ip: u.registrationIp,
+    device_information: u.deviceInformation,
+    browser_information: u.browserInformation,
+    requested_fields_to_edit: u.requestedFieldsToEdit
   };
 }
 
@@ -804,6 +855,39 @@ function mapUserFromDB(u: any): User {
     email: u.email,
     fullName: u.full_name,
     role: u.role,
+    approvalStatus: u.approval_status || 'Approved',
+    firstName: u.first_name || '',
+    lastName: u.last_name || '',
+    profilePhoto: u.profile_photo || '',
+    phoneNumber: u.phone_number || '',
+    employeeId: u.employee_id || '',
+    department: u.department || '',
+    designation: u.designation || '',
+    approvedBy: u.approved_by || undefined,
+    approvedAt: u.approved_at || undefined,
+    rejectedBy: u.rejected_by || undefined,
+    rejectedAt: u.rejected_at || undefined,
+    rejectionReason: u.rejection_reason || '',
+    approvalNotes: u.approval_notes || '',
+    lastStatusChange: u.last_status_change || undefined,
+    registrationIp: u.registration_ip || '',
+    deviceInformation: u.device_information || '',
+    browserInformation: u.browser_information || '',
+    requestedFieldsToEdit: u.requested_fields_to_edit || []
+  };
+}
+
+function mapHistoryFromDB(h: any): UserApprovalHistory {
+  return {
+    id: h.id,
+    userId: h.user_id,
+    administratorId: h.administrator_id || undefined,
+    action: h.action,
+    previousStatus: h.previous_status,
+    newStatus: h.new_status,
+    reason: h.reason || '',
+    timestamp: h.timestamp,
+    ipAddress: h.ip_address || ''
   };
 }
 
@@ -854,6 +938,7 @@ interface TransitState {
   documents: Document[];
   notifications: Notification[];
   auditLogs: AuditLog[];
+  userApprovalHistory: UserApprovalHistory[];
   rememberMe: boolean;
   authLoading: boolean;
 
@@ -861,6 +946,13 @@ interface TransitState {
   login: (email: string, role?: UserRole) => boolean; // Keep for fallback compatibility
   loginWithEmail: (email: string, role: UserRole, password?: string) => Promise<boolean>;
   loginWithGoogle: (role: UserRole) => Promise<boolean>;
+  registerRequest: (user: Omit<User, 'id' | 'approvalStatus'>, password?: string) => Promise<{ success: boolean; message: string }>;
+  approveUserRequest: (userId: string, adminId: string, notes?: string) => Promise<{ success: boolean; message: string }>;
+  rejectUserRequest: (userId: string, adminId: string, reason: string) => Promise<{ success: boolean; message: string }>;
+  requestMoreInfo: (userId: string, adminId: string, fields: string[], notes: string) => Promise<{ success: boolean; message: string }>;
+  suspendUser: (userId: string, adminId: string) => Promise<{ success: boolean; message: string }>;
+  reactivateUser: (userId: string, adminId: string) => Promise<{ success: boolean; message: string }>;
+  updateUserRequestFields: (userId: string, updates: Partial<User>) => Promise<{ success: boolean; message: string }>;
   logout: () => Promise<void>;
   setRememberMe: (val: boolean) => void;
   setCurrentUser: (user: User | null) => void;
@@ -928,6 +1020,7 @@ export const useTransitStore = create<TransitState>()(
       documents: seedDocuments,
       notifications: seedNotifications,
       auditLogs: seedAuditLogs,
+      userApprovalHistory: [],
       rememberMe: false,
       authLoading: false,
 
@@ -950,6 +1043,9 @@ export const useTransitStore = create<TransitState>()(
           email: emailLower,
           fullName: emailLower.split('@')[0].toUpperCase(),
           role: selectedRole || 'Fleet Manager',
+          approvalStatus: 'Approved',
+          firstName: emailLower.split('@')[0],
+          lastName: '',
         };
         set((state) => ({
           users: [...state.users, newUser],
@@ -980,25 +1076,28 @@ export const useTransitStore = create<TransitState>()(
               id: generateUUID(),
               email: email.toLowerCase().trim(),
               fullName: email.split('@')[0].toUpperCase(),
-              role: role
+              role: role,
+              approvalStatus: 'Pending Approval',
+              firstName: email.split('@')[0],
+              lastName: '',
             };
             set((state) => ({ users: [...state.users, user!] }));
             if (isSupabaseConfigured && supabase) {
-              await supabase.from('users').insert({
-                id: user.id,
-                email: user.email,
-                full_name: user.fullName,
-                role: user.role
-              });
+              await supabase.from('users').insert(mapUserToDB(user));
             }
-          } else if (role && user.role !== role) {
-            user.role = role;
-            set((state) => ({
-              users: state.users.map((u) => u.id === user!.id ? { ...u, role } : u)
-            }));
-            if (isSupabaseConfigured && supabase) {
-              await supabase.from('users').update({ role }).eq('id', user.id);
-            }
+          }
+
+          if (user.approvalStatus === 'Pending Approval') {
+            throw new Error('Your registration request is still pending administrator approval. Please wait until your organization administrator approves your account.');
+          }
+          if (user.approvalStatus === 'Rejected') {
+            throw new Error(`Your registration request has been rejected. Reason: ${user.rejectionReason || 'No reason provided.'}`);
+          }
+          if (user.approvalStatus === 'Suspended') {
+            throw new Error('Your account has been suspended. Please contact your administrator.');
+          }
+          if (user.approvalStatus === 'Inactive') {
+            throw new Error('Your account is inactive. Please contact your administrator.');
           }
 
           set({ currentUser: user, authLoading: false });
@@ -1033,16 +1132,14 @@ export const useTransitStore = create<TransitState>()(
               id: generateUUID(),
               email: email.toLowerCase().trim(),
               fullName: email.split('@')[0].toUpperCase(),
-              role: role
+              role: role,
+              approvalStatus: 'Pending Approval',
+              firstName: email.split('@')[0],
+              lastName: '',
             };
             set((state) => ({ users: [...state.users, user!] }));
             if (isSupabaseConfigured && supabase) {
-              await supabase.from('users').insert({
-                id: user.id,
-                email: user.email,
-                full_name: user.fullName,
-                role: user.role
-              });
+              await supabase.from('users').insert(mapUserToDB(user));
             }
           } else if (role && user.role !== role) {
             user.role = role;
@@ -1054,6 +1151,19 @@ export const useTransitStore = create<TransitState>()(
             }
           }
 
+          if (user.approvalStatus === 'Pending Approval') {
+            throw new Error('Your registration request is still pending administrator approval. Please wait until your organization administrator approves your account.');
+          }
+          if (user.approvalStatus === 'Rejected') {
+            throw new Error(`Your registration request has been rejected. Reason: ${user.rejectionReason || 'No reason provided.'}`);
+          }
+          if (user.approvalStatus === 'Suspended') {
+            throw new Error('Your account has been suspended. Please contact your administrator.');
+          }
+          if (user.approvalStatus === 'Inactive') {
+            throw new Error('Your account is inactive. Please contact your administrator.');
+          }
+
           set({ currentUser: user, authLoading: false });
           get().logAction('User Login', `User ${user.email} logged in with role ${user.role} (Firebase/Google)`);
           return true;
@@ -1062,6 +1172,264 @@ export const useTransitStore = create<TransitState>()(
           set({ authLoading: false });
           throw err;
         }
+      },
+
+      registerRequest: async (userDetails, password = 'password123') => {
+        set({ authLoading: true });
+        try {
+          const newUserId = generateUUID();
+          
+          if (isFirebaseConfigured && auth) {
+            await createUserWithEmailAndPassword(auth, userDetails.email, password);
+          }
+
+          const newUser: User = {
+            ...userDetails,
+            id: newUserId,
+            approvalStatus: 'Pending Approval',
+            lastStatusChange: new Date().toISOString()
+          };
+
+          set((state) => ({ users: [...state.users, newUser] }));
+          if (isSupabaseConfigured && supabase) {
+            await supabase.from('users').insert(mapUserToDB(newUser));
+          }
+
+          // Trigger local in-app notification for Admins
+          get().addNotification('Registration', `🔔 New Registration Request: ${newUser.fullName} has requested access as ${newUser.role} in ${newUser.department || 'Operations'}.`);
+          get().logAction('Registration Request Submitted', `User ${newUser.email} submitted registration request for role ${newUser.role}`);
+          
+          set({ authLoading: false });
+          return { success: true, message: 'Your registration request has been submitted successfully.' };
+        } catch (err: any) {
+          console.error('Registration request error:', err);
+          set({ authLoading: false });
+          return { success: false, message: err?.message || 'Failed to submit registration request.' };
+        }
+      },
+
+      approveUserRequest: async (userId, adminId, notes) => {
+        const adminUser = get().users.find(u => u.id === adminId);
+        const adminName = adminUser?.fullName || 'Administrator';
+        const targetUser = get().users.find(u => u.id === userId);
+        if (!targetUser) return { success: false, message: 'User not found' };
+
+        const previousStatus = targetUser.approvalStatus;
+        const newStatus = 'Approved';
+        const timestamp = new Date().toISOString();
+
+        const updatedUser: User = {
+          ...targetUser,
+          approvalStatus: newStatus,
+          approvedBy: adminId,
+          approvedAt: timestamp,
+          approvalNotes: notes || '',
+          lastStatusChange: timestamp
+        };
+
+        set((state) => ({
+          users: state.users.map(u => u.id === userId ? updatedUser : u)
+        }));
+
+        if (isSupabaseConfigured && supabase) {
+          await supabase.from('users').update(mapUserToDB(updatedUser)).eq('id', userId);
+          // Log to approval history table
+          await supabase.from('user_approval_history').insert({
+            user_id: userId,
+            administrator_id: adminId,
+            action: 'Approve',
+            previous_status: previousStatus,
+            new_status: newStatus,
+            reason: notes || '',
+            timestamp: timestamp,
+            ip_address: targetUser.registrationIp || ''
+          });
+        }
+
+        get().logAction('Approve User', `Administrator ${adminName} approved user ${targetUser.email}.`);
+        get().addNotification('Clearance', `User account ${targetUser.email} has been approved and activated.`);
+        return { success: true, message: 'User approved successfully.' };
+      },
+
+      rejectUserRequest: async (userId, adminId, reason) => {
+        const adminUser = get().users.find(u => u.id === adminId);
+        const adminName = adminUser?.fullName || 'Administrator';
+        const targetUser = get().users.find(u => u.id === userId);
+        if (!targetUser) return { success: false, message: 'User not found' };
+
+        const previousStatus = targetUser.approvalStatus;
+        const newStatus = 'Rejected';
+        const timestamp = new Date().toISOString();
+
+        const updatedUser: User = {
+          ...targetUser,
+          approvalStatus: newStatus,
+          rejectedBy: adminId,
+          rejectedAt: timestamp,
+          rejectionReason: reason,
+          lastStatusChange: timestamp
+        };
+
+        set((state) => ({
+          users: state.users.map(u => u.id === userId ? updatedUser : u)
+        }));
+
+        if (isSupabaseConfigured && supabase) {
+          await supabase.from('users').update(mapUserToDB(updatedUser)).eq('id', userId);
+          await supabase.from('user_approval_history').insert({
+            user_id: userId,
+            administrator_id: adminId,
+            action: 'Reject',
+            previous_status: previousStatus,
+            new_status: newStatus,
+            reason: reason,
+            timestamp: timestamp,
+            ip_address: targetUser.registrationIp || ''
+          });
+        }
+
+        get().logAction('Reject User', `Administrator ${adminName} rejected user ${targetUser.email}. Reason: ${reason}`);
+        get().addNotification('Clearance', `User account ${targetUser.email} has been rejected.`);
+        return { success: true, message: 'User request rejected successfully.' };
+      },
+
+      requestMoreInfo: async (userId, adminId, fields, notes) => {
+        const adminUser = get().users.find(u => u.id === adminId);
+        const adminName = adminUser?.fullName || 'Administrator';
+        const targetUser = get().users.find(u => u.id === userId);
+        if (!targetUser) return { success: false, message: 'User not found' };
+
+        const previousStatus = targetUser.approvalStatus;
+        const newStatus = 'Information Required';
+        const timestamp = new Date().toISOString();
+
+        const updatedUser: User = {
+          ...targetUser,
+          approvalStatus: newStatus,
+          requestedFieldsToEdit: fields,
+          approvalNotes: notes,
+          lastStatusChange: timestamp
+        };
+
+        set((state) => ({
+          users: state.users.map(u => u.id === userId ? updatedUser : u)
+        }));
+
+        if (isSupabaseConfigured && supabase) {
+          await supabase.from('users').update(mapUserToDB(updatedUser)).eq('id', userId);
+          await supabase.from('user_approval_history').insert({
+            user_id: userId,
+            administrator_id: adminId,
+            action: 'Request Info',
+            previous_status: previousStatus,
+            new_status: newStatus,
+            reason: notes,
+            timestamp: timestamp,
+            ip_address: targetUser.registrationIp || ''
+          });
+        }
+
+        get().logAction('Request User Info', `Administrator ${adminName} requested more info from ${targetUser.email}. Fields: ${fields.join(', ')}`);
+        return { success: true, message: 'Information request submitted successfully.' };
+      },
+
+      suspendUser: async (userId, adminId) => {
+        const adminUser = get().users.find(u => u.id === adminId);
+        const adminName = adminUser?.fullName || 'Administrator';
+        const targetUser = get().users.find(u => u.id === userId);
+        if (!targetUser) return { success: false, message: 'User not found' };
+
+        const previousStatus = targetUser.approvalStatus;
+        const newStatus = 'Suspended';
+        const timestamp = new Date().toISOString();
+
+        const updatedUser: User = {
+          ...targetUser,
+          approvalStatus: newStatus,
+          lastStatusChange: timestamp
+        };
+
+        set((state) => ({
+          users: state.users.map(u => u.id === userId ? updatedUser : u)
+        }));
+
+        if (isSupabaseConfigured && supabase) {
+          await supabase.from('users').update(mapUserToDB(updatedUser)).eq('id', userId);
+          await supabase.from('user_approval_history').insert({
+            user_id: userId,
+            administrator_id: adminId,
+            action: 'Suspend',
+            previous_status: previousStatus,
+            new_status: newStatus,
+            timestamp: timestamp,
+            ip_address: targetUser.registrationIp || ''
+          });
+        }
+
+        get().logAction('Suspend User', `Administrator ${adminName} suspended user ${targetUser.email}.`);
+        return { success: true, message: 'User suspended successfully.' };
+      },
+
+      reactivateUser: async (userId, adminId) => {
+        const adminUser = get().users.find(u => u.id === adminId);
+        const adminName = adminUser?.fullName || 'Administrator';
+        const targetUser = get().users.find(u => u.id === userId);
+        if (!targetUser) return { success: false, message: 'User not found' };
+
+        const previousStatus = targetUser.approvalStatus;
+        const newStatus = 'Approved';
+        const timestamp = new Date().toISOString();
+
+        const updatedUser: User = {
+          ...targetUser,
+          approvalStatus: newStatus,
+          lastStatusChange: timestamp
+        };
+
+        set((state) => ({
+          users: state.users.map(u => u.id === userId ? updatedUser : u)
+        }));
+
+        if (isSupabaseConfigured && supabase) {
+          await supabase.from('users').update(mapUserToDB(updatedUser)).eq('id', userId);
+          await supabase.from('user_approval_history').insert({
+            user_id: userId,
+            administrator_id: adminId,
+            action: 'Reactivate',
+            previous_status: previousStatus,
+            new_status: newStatus,
+            timestamp: timestamp,
+            ip_address: targetUser.registrationIp || ''
+          });
+        }
+
+        get().logAction('Reactivate User', `Administrator ${adminName} reactivated user ${targetUser.email}.`);
+        return { success: true, message: 'User reactivated successfully.' };
+      },
+
+      updateUserRequestFields: async (userId, updates) => {
+        const targetUser = get().users.find(u => u.id === userId);
+        if (!targetUser) return { success: false, message: 'User not found' };
+
+        const updatedUser: User = {
+          ...targetUser,
+          ...updates,
+          approvalStatus: 'Pending Approval', // Resubmitted, goes back to pending
+          requestedFieldsToEdit: [], // Clear requested edits list
+          lastStatusChange: new Date().toISOString()
+        };
+
+        set((state) => ({
+          users: state.users.map(u => u.id === userId ? updatedUser : u)
+        }));
+
+        if (isSupabaseConfigured && supabase) {
+          await supabase.from('users').update(mapUserToDB(updatedUser)).eq('id', userId);
+        }
+
+        get().addNotification('Registration', `🔔 Resubmitted: ${updatedUser.fullName} updated and resubmitted their registration details.`);
+        get().logAction('Resubmit Registration Info', `User ${targetUser.email} updated and resubmitted details.`);
+        return { success: true, message: 'Information resubmitted successfully.' };
       },
 
       logout: async () => {
@@ -1748,7 +2116,8 @@ export const useTransitStore = create<TransitState>()(
             { data: dbExpenses },
             { data: dbDocs },
             { data: dbNotifs },
-            { data: dbAudits }
+            { data: dbAudits },
+            { data: dbHistory }
           ] = await Promise.all([
             supabase.from('users').select('*'),
             supabase.from('vehicles').select('*'),
@@ -1759,7 +2128,8 @@ export const useTransitStore = create<TransitState>()(
             supabase.from('expenses').select('*'),
             supabase.from('documents').select('*'),
             supabase.from('notifications').select('*'),
-            supabase.from('audit_logs').select('*').order('timestamp', { ascending: false })
+            supabase.from('audit_logs').select('*').order('timestamp', { ascending: false }),
+            supabase.from('user_approval_history').select('*').order('timestamp', { ascending: false })
           ]);
 
           const fetchedUsers = dbUsers ? dbUsers.map(mapUserFromDB) : [];
@@ -1787,6 +2157,7 @@ export const useTransitStore = create<TransitState>()(
             documents: dbDocs ? dbDocs.map(mapDocumentFromDB) : [],
             notifications: dbNotifs ? dbNotifs.map(mapNotificationFromDB) : [],
             auditLogs: dbAudits ? dbAudits.map(mapAuditFromDB) : [],
+            userApprovalHistory: dbHistory ? dbHistory.map(mapHistoryFromDB) : [],
           });
         } catch (err) {
           console.error('Failed to sync with Supabase:', err);
@@ -1807,6 +2178,7 @@ export const useTransitStore = create<TransitState>()(
         documents: state.documents,
         notifications: state.notifications,
         auditLogs: state.auditLogs,
+        userApprovalHistory: state.userApprovalHistory,
         rememberMe: state.rememberMe,
       }),
     }

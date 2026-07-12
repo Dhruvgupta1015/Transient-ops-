@@ -24,6 +24,9 @@ export function AuthListener() {
             email: firebaseUser.email || '',
             fullName: (firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User').toUpperCase(),
             role: 'Fleet Manager',
+            approvalStatus: 'Pending Approval',
+            firstName: firebaseUser.email?.split('@')[0] || '',
+            lastName: '',
           });
         }
       } else {
