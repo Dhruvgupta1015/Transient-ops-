@@ -70,6 +70,18 @@ export interface UserApprovalHistory {
 
 export type VehicleStatus = 'Available' | 'On Trip' | 'In Shop' | 'Retired';
 
+export interface TelemetryPoint {
+  latitude: number;
+  longitude: number;
+  speed?: number;
+  heading?: number;
+  fuelLevel?: number;
+  batteryLevel?: number;
+  ignition?: boolean;
+  accuracy?: number;
+  timestamp: string;
+}
+
 export interface Vehicle {
   id: string;
   registrationNumber: string;
@@ -84,8 +96,12 @@ export interface Vehicle {
   pollutionCert: string;
   imageUrl: string;
   status: VehicleStatus;
+  companyId?: string;
   // Advanced Enterprise Fields
   gpsLocation?: { lat: number; lng: number };
+  truckTelemetry?: TelemetryPoint;
+  mobileTelemetry?: TelemetryPoint;
+  activeTelemetrySource?: 'telematics' | 'mobile_app' | 'offline';
   healthScore?: number; // 0 - 100
   lifecycleStatus?: 'Active' | 'Approaching Retirement' | 'Retired';
 }
@@ -999,7 +1015,7 @@ interface TransitState {
   addVehicle: (vehicle: Omit<Vehicle, 'id'>) => { success: boolean; message: string };
   updateVehicle: (id: string, vehicle: Partial<Vehicle>) => { success: boolean; message: string };
   deleteVehicle: (id: string) => { success: boolean; message: string };
-  updateVehicleLocation: (id: string, lat: number, lng: number, heading: number, speed: number) => void;
+  processTelemetryEvent: (payload: any) => void;
 
   // Drivers Actions
   addDriver: (driver: Omit<Driver, 'id'>) => { success: boolean; message: string };
@@ -1612,22 +1628,57 @@ export const useTransitStore = create<TransitState>()(
         return { success: true, message: 'Vehicle updated successfully.' };
       },
 
-      updateVehicleLocation: (id, lat, lng, heading, speed) => {
-        set((state) => ({
-          vehicles: state.vehicles.map((v) => 
-            v.id === id ? { ...v, gpsLocation: { lat, lng } } : v
-          ),
-        }));
-        // For telematics tracking events, push a new entry into vehicle_location_events table
-        supabaseSync('vehicle_location_events', 'insert', {
-          vehicle_id: id,
-          latitude: lat,
-          longitude: lng,
-          speed: speed,
-          heading: heading,
-          source: 'telematics',
-          recorded_at: new Date().toISOString()
-        }, undefined, get().currentUser?.companyId);
+      processTelemetryEvent: (payload) => {
+        set((state) => {
+          const vehIndex = state.vehicles.findIndex(v => v.id === payload.vehicle_id);
+          if (vehIndex === -1) return state; // Vehicle not found
+
+          const veh = state.vehicles[vehIndex];
+          const newTelemetry: TelemetryPoint = {
+            latitude: payload.latitude,
+            longitude: payload.longitude,
+            speed: payload.speed,
+            heading: payload.heading,
+            fuelLevel: payload.fuel_level,
+            batteryLevel: payload.battery_level,
+            ignition: payload.ignition_status,
+            accuracy: payload.gps_accuracy,
+            timestamp: payload.recorded_at
+          };
+
+          const isTruck = payload.source === 'telematics';
+          const truckTelemetry = isTruck ? newTelemetry : veh.truckTelemetry;
+          const mobileTelemetry = !isTruck ? newTelemetry : veh.mobileTelemetry;
+
+          // Source Selection Logic
+          const now = Date.now();
+          const oneMinute = 60000;
+          
+          let activeTelemetrySource: 'telematics' | 'mobile_app' | 'offline' = 'offline';
+          let gpsLocation = veh.gpsLocation;
+
+          const truckIsOnline = truckTelemetry && (now - new Date(truckTelemetry.timestamp).getTime() < oneMinute);
+          const mobileIsOnline = mobileTelemetry && (now - new Date(mobileTelemetry.timestamp).getTime() < oneMinute);
+
+          if (truckIsOnline) {
+             activeTelemetrySource = 'telematics';
+             gpsLocation = { lat: truckTelemetry.latitude, lng: truckTelemetry.longitude };
+          } else if (mobileIsOnline) {
+             activeTelemetrySource = 'mobile_app';
+             gpsLocation = { lat: mobileTelemetry.latitude, lng: mobileTelemetry.longitude };
+          }
+
+          const updatedVehicles = [...state.vehicles];
+          updatedVehicles[vehIndex] = {
+            ...veh,
+            truckTelemetry,
+            mobileTelemetry,
+            activeTelemetrySource,
+            gpsLocation
+          };
+
+          return { vehicles: updatedVehicles };
+        });
       },
 
       deleteVehicle: (id) => {
@@ -2289,6 +2340,17 @@ export const useTransitStore = create<TransitState>()(
             auditLogs: dbAudits ? dbAudits.map(mapAuditFromDB) : [],
             userApprovalHistory: dbHistory ? dbHistory.map(mapHistoryFromDB) : [],
           });
+
+          // Setup Realtime subscription for Telemetry
+          // We attach it to the window object to avoid multiple subscriptions across hot reloads
+          if (typeof window !== 'undefined' && !(window as any)._telemetryChannel) {
+            (window as any)._telemetryChannel = supabase.channel('public:vehicle_location_events')
+              .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vehicle_location_events' }, payload => {
+                get().processTelemetryEvent(payload.new);
+              })
+              .subscribe();
+          }
+
         } catch (err) {
           console.error('Failed to sync with Supabase:', err);
         }
